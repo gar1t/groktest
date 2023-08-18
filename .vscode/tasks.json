@@ -26,10 +26,24 @@
 
   "tasks": [
     {
-      "label": "Run Current as Groktest",
+      "label": "Run Current as Test",
       "type": "process",
       "command": "${command:python.interpreterPath}",
       "args": ["-m", "groktest", "${file}"]
+    },
+    {
+      "label": "Run Test",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "groktest", "${workspaceFolder}/${input:test}"]
+
+    },
+    {
+      "label": "Run Last Test",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "groktest", "--last"]
+
     },
     {
       "label": "Run All Tests",
@@ -40,6 +54,21 @@
         "groktest",
         "${workspaceFolder}/README.md",
         "${workspaceFolder}/implementation.md"
+      ]
+    }
+  ],
+
+  "inputs": [
+    {
+      "id": "test",
+      "type": "pickString",
+      "description": "Project test",
+      "options": [
+        "README.md",
+        "implementation.md",
+        "examples/doctest.md",
+        "examples/simple.md",
+        "examples/unkown-format.md"
       ]
     }
   ]

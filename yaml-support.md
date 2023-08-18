@@ -1,5 +1,5 @@
 ---
-test-format: doctest
+test-type: doctest
 ---
 
 # Full YAML support

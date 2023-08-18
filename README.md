@@ -1,5 +1,5 @@
 ---
-test-format: doctest
+test-type: doctest
 ---
 
 # Groktest
@@ -110,10 +110,10 @@ Multiline expressions are continued on subsequent lines using `...`.
     ... 2 + 4)
     7
 
-Front matter is used to customize tests.
+Front matter is used to configure tests.
 
     ---
-    test-format:
+    test-config:
       ps1: '> '
       ps2: '+ '
     ---
@@ -128,7 +128,7 @@ files.
 Custom format types may be defined in test font matter.
 
     ---
-    test-format:
+    test-config:
       parse-types:
         id: [a-f0-9]{8}
     ---

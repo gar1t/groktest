@@ -1,5 +1,5 @@
 ---
-test-format: doctest
+test-type: doctest
 ---
 
 # Groktest Implementation
@@ -163,7 +163,7 @@ INI:
     ... """)
     {'bar': 'hello', 'foo': 123}
 
-The sections below illustrate more complex examples of various formats.
+The sections below provide detailed examples of front-matter formats.
 
 #### Simple YAML
 
@@ -238,7 +238,7 @@ In the simple YAML support, comments can only appear on separate lines.
 
     >>> parse_json("""
     ... {
-    ...   "test-format": {
+    ...   "test-config": {
     ...     "ps1": "> ",
     ...     "parse-types": {
     ...       "id": "[a-f0-9]{8}"
@@ -246,7 +246,7 @@ In the simple YAML support, comments can only appear on separate lines.
     ...   }
     ... }
     ... """)
-    {'test-format': {'parse-types': {'id': '[a-f0-9]{8}'}, 'ps1': '> '}}
+    {'test-config': {'parse-types': {'id': '[a-f0-9]{8}'}, 'ps1': '> '}}
 
 #### INI
 
@@ -257,13 +257,13 @@ INI based config supported using the `configparser` module.
     ...     pprint(groktest._try_parse_ini(s, "<test>", raise_error=True))
 
     >>> parse_ini("""
-    ... [test-format]
+    ... [test-config]
     ... ps1: '> '
     ...
-    ... [test-format.parse-types]
+    ... [test-config.parse-types]
     ... id: [a-f0-9]{8}
     ... """)
-    {'test-format': {'ps1': '> '}, 'test-format.parse-types': {'id': '[a-f0-9]{8}'}}
+    {'test-config': {'ps1': '> '}, 'test-config.parse-types': {'id': '[a-f0-9]{8}'}}
 
 Indented sections are not supported.
 

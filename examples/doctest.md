@@ -1,5 +1,5 @@
 ---
-test-format: doctest
+test-type: doctest
 ---
 
 Groktest supports [`doctest`](https://docs.python.org/library/doctest)

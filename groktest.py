@@ -7,23 +7,32 @@ from typing import *
 import json
 import configparser
 import logging
+import os
 import re
 
 log = logging.getLogger("groktest")
-
-PARSERS: Dict[str, Parser] = {}
 
 
 class Error(Exception):
     pass
 
 
-class FormatNotSupported(Error):
+class TestTypeNotSupported(Error):
+    pass
+
+
+class RuntimeNotSupported(Error):
     pass
 
 
 class Config:
-    pass
+    def __init__(self, name: str, runtime: str, test_pattern: Pattern[str]):
+        self.name = name
+        self.runtime = runtime
+        self.test_pattern = test_pattern
+
+    def __str__(self):
+        return f"<groktest.Config '{self.name}'>"
 
 
 class TestSource:
@@ -46,37 +55,40 @@ class Test:
         self.config = config
 
 
-PatternType = Union[Literal["test"], Literal["ignore"], Literal["error"]]
-
-
-class Parser:
-    def __init__(self, patterns: Dict[PatternType, Pattern[str]]):
-        self.patterns = patterns
-
-
 class Runtime:
-    pass
+    def apply_test(self, test: Test, state: RunnerState):
+        raise NotImplemented()
 
 
 class PythonRuntime(Runtime):
     pass
 
 
-class PosixShellRuntime(Runtime):
-    pass
-
-
 class RunnerState:
-    def __init__(self):
-        pass
+    def __init__(self, tests: List[Test], runtime: Runtime):
+        self.tests = tests
+        self.runtime = runtime
+        self.results: Dict[str, Any] = {"failed": 0, "tested": 0}
+
+
+PYTHON_CONFIG = DEFAULT_CONFIG = Config(
+    name="python",
+    runtime="python",
+    test_pattern=re.compile(r""),
+)
+
+CONFIG: Dict[str, Config] = {"python": PYTHON_CONFIG}
+
+RUNTIME = {"python": PythonRuntime()}
 
 
 def init_runner_state(filename: str):
     contents = _read_file(filename)
     fm = _parse_front_matter(contents, filename)
     config = _config_for_front_matter(fm, filename)
-    parser = _parser_for_config(config)
     runtime = _runtime_for_config(config)
+    tests = parse_tests(contents, config)
+    return RunnerState(tests, runtime)
 
 
 def _read_file(filename: str):
@@ -159,7 +171,7 @@ def _try_parse_ini(
 
 
 def _ini_val(s: str):
-    if s[:1] + s[-1:] in ("\"\"", "''"):
+    if s[:1] + s[-1:] in ('""', "''"):
         return s[1:-1]
     s_lower = s.lower()
     if s_lower in ("true", "yes", "on"):
@@ -181,42 +193,55 @@ def _try_parse_simple_yaml(s: str, ref: str, raise_error: bool = False):
 
 
 def _config_for_front_matter(fm: Any, ref: str):
-    assert False
+    return (
+        _default_config_for_missing_or_invalid_front_matter(fm, ref)
+        or _config_for_test_type(fm, ref)
+        or _explicit_config(fm, ref)
+        or DEFAULT_CONFIG
+    )
 
 
-def _parser_for_config(config: Config):
-    return _parser_for_front_config(config) or _default_parser()
-
-
-def _parser_for_front_config(config: Config):
-    assert False, config
-
-
-def _parser_for_test_format(format: Any):
-    if not format:
-        return None
-    try:
-        return PARSERS[format]
-    except KeyError:
-        raise FormatNotSupported(format)
-
-
-def _configured_parser(config: Config):
-    # TODO: construct parser from config - e.g. `test-example-pattern`,
-    # etc.
+def _default_config_for_missing_or_invalid_front_matter(fm: Any, ref: str):
+    if not fm:
+        return DEFAULT_CONFIG
+    if not isinstance(fm, dict):
+        log.warning(
+            "Unexpected front matter type %s in %s, expected map", type(fm), ref
+        )
+        return DEFAULT_CONFIG
     return None
 
 
-def _default_parser():
-    return _parser_for_test_format("groktest")
+def _config_for_test_type(fm: Dict[str, Any], ref: str):
+    assert isinstance(fm, dict)
+    test_type = fm.get("test-type")
+    if not test_type:
+        return None
+    try:
+        return CONFIG[test_type]
+    except KeyError:
+        raise TestTypeNotSupported(test_type)
+
+
+def _explicit_config(fm: Any, ref: str):
+    assert isinstance(fm, dict)
+    config = fm.get("test-config")
+    if not config:
+        return None
+    assert False, ("TODO", config)
+
+
+def parse_tests(content: str, config: Config):
+    for part in config.test_pattern.finditer(content):
+        print(part)
+    return cast(List[Test], [])
 
 
 def _runtime_for_config(config: Config):
-    pass
-
-
-class Runner:
-    pass
+    try:
+        return RUNTIME[config.runtime]
+    except KeyError:
+        raise RuntimeNotSupported(config.runtime)
 
 
 def test_file(filename: str):
@@ -235,15 +260,17 @@ def test_file(filename: str):
         return result
 
     state = init_runner_state(filename)
-    print(f"TODO test {filename}")
-    return 0, 0
+    for test in state.tests:
+        state.runtime.apply_test(test, state)
+    return state.results
 
 
 def _maybe_doctest_bootstrap(filename: str):
     contents = _read_file(filename)
     fm = _parse_front_matter(contents, filename)
-    if fm.get("test-format") == "doctest":
-        return _doctest_file(filename)
+    if fm.get("test-type") == "doctest":
+        failed, tested = _doctest_file(filename)
+        return {"failed": failed, "tested": tested}
     return None
 
 
@@ -254,12 +281,44 @@ def _doctest_file(filename: str):
     return doctest.testfile(filename, module_relative=False, optionflags=options)
 
 
-def _init_logging(args: Any):
+def _main_init_logging(args: Any):
     if args.debug:
         logging.basicConfig(
             level=logging.DEBUG,
             format="%(levelname)s: [%(name)s] %(message)s",
         )
+
+
+def _main_test_filenames(args: Any):
+    if args.last:
+        last = _main_last()
+        if not last:
+            raise SystemExit(
+                "last not found - run at least one test before using '--last'"
+            )
+        return last
+    return args.paths
+
+
+def _main_last():
+    try:
+        f = open(_main_last_savefile())
+    except FileNotFoundError:
+        return None
+    else:
+        with f:
+            return json.load(f)
+
+
+def _main_save_last(filenames: List[str]):
+    with open(_main_last_savefile(), "w") as f:
+        json.dump(filenames, f)
+
+
+def _main_last_savefile():
+    import tempfile
+
+    return os.path.join(tempfile.gettempdir(), "groktest.last")
 
 
 def main():
@@ -270,25 +329,23 @@ def main():
         "paths",
         metavar="PATH",
         type=str,
-        help="File to test.",
-        nargs="+",
+        help="file to test",
+        nargs="*",
     )
-    p.add_argument(
-        "-f",
-        "--format",
-        metavar="FORMAT",
-        help="Format to use for specified tests.",
-    )
-    p.add_argument("--debug", action="store_true", help="Print debug info")
+    p.add_argument("--last", action="store_true", help="re-run last tests")
+    p.add_argument("--debug", action="store_true", help="show debug info")
     args = p.parse_args()
-    _init_logging(args)
+    _main_init_logging(args)
 
     failed = tested = 0
 
-    for filename in args.paths:
-        f, t = test_file(filename)
-        failed += f
-        tested += t
+    to_run = _main_test_filenames(args)
+    _main_save_last(to_run)
+
+    for filename in to_run:
+        result = test_file(filename)
+        failed += result["failed"]
+        tested += result["tested"]
 
     assert failed <= tested, (failed, tested)
     if tested == 0:
