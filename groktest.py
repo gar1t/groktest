@@ -9,7 +9,7 @@ import configparser
 import logging
 import re
 
-log = logging.getLogger()
+log = logging.getLogger("groktest")
 
 PARSERS: Dict[str, Parser] = {}
 
@@ -22,7 +22,8 @@ class FormatNotSupported(Error):
     pass
 
 
-TestConfig = Dict[str, Union[str, int, float]]
+class Config:
+    pass
 
 
 class TestSource:
@@ -37,7 +38,7 @@ class Test:
         expr: str,
         expected: str,
         source: TestSource,
-        config: TestConfig,
+        config: Config,
     ):
         self.expr = expr
         self.expected = expected
@@ -72,7 +73,8 @@ class RunnerState:
 
 def init_runner_state(filename: str):
     contents = _read_file(filename)
-    config = _parse_front_matter(contents)
+    fm = _parse_front_matter(contents, filename)
+    config = _config_for_front_matter(fm, filename)
     parser = _parser_for_config(config)
     runtime = _runtime_for_config(config)
 
@@ -81,137 +83,113 @@ def _read_file(filename: str):
     return open(filename).read()
 
 
-_FRONT_MATTER_P = re.compile(r"^---\n(.*?)\n---\n")
+_FRONT_MATTER_P = re.compile(r"\s*^---\n(.*)\n---\n?$", re.MULTILINE | re.DOTALL)
 
 
-def _parse_front_matter(s: str):
-    """Parse front matter from string,
+def _parse_front_matter(s: str, ref: str) -> Any:
+    """Parse front matter from string.
 
-    Return a dict of key values with keys starting with  `test-` and
-    `gkt-` from string font-matter. Front matter may be specified as
-    JSON, INI/TOML or YAML. YAML parsing is simplistic and only supports
-    single assignment of string and numbers, which is sufficient for
-    config.
+    Front matter can be defined using YAML, JSON, or INI.
 
-    If a key starts with `gkt-` the prefix is normalized to be `test-`.
-    This lets users use the `gkt-` prefix to avoid incidental collisions
-    with `test-` keys.
-
-    Current implementation is to look for front matter starting from
-    line 1, which must be `---\n` to a following line `---\n`. This is a
-    convention used for markdown files and should be used for other test
-    formats including restructured text.
+    If PyYaml is installed, it's used to parse front matter. As this
+    library has no external dependencies, if PyYaml is not installed, a
+    parsing hack is used in attempt to parse front matter as YAML. In
+    this case, front matter configuration is limited to simple key value
+    pairs using `<key>: <value>` syntax.
     """
     m = _FRONT_MATTER_P.match(s)
     if not m:
-        return cast(TestConfig, {})
+        return {}
     fm = m.group(1)
-    config: TestConfig = (
-        _try_parse_json_front_matter(fm)
-        or _try_parse_ini_front_matter(fm)
-        or _try_parse_yaml_front_matter(fm)
+    return (
+        _try_parse_full_yaml(fm, ref)
+        or _try_parse_json(fm, ref)
+        or _try_parse_ini(fm, ref)
+        or _try_parse_simple_yaml(fm, ref)
         or {}
     )
-    return _normalize_config(config)
 
 
-def _normalize_config(config: TestConfig) -> TestConfig:
-    return {
-        _norm_test_option_key(key): config[key]
-        for key in config
-        if _is_test_option(key)
-    }
-
-
-def _is_key_option(key: str):
-    return key.startswith("test-") or key.startswith("gkt-")
-
-
-def _norm_test_option_key(key: str):
-    return f"test-{key[4:]}" if key.startswith("gkt-") else key
-
-
-def _is_test_option(key: str):
-    return key.startswith("test-") or key.startswith("gkt-")
-
-
-def _try_parse_json_front_matter(s: str):
+def _try_parse_full_yaml(s: str, ref: str, raise_error: bool = False):
     try:
-        config = json.loads(s)
-    except ValueError:
+        import yaml  # type: ignore
+    except ImportError:
+        if raise_error:
+            raise
+        log.debug("yaml module not available, skipping full YAML for %s", ref)
+        return None
+    try:
+        return yaml.safe_load(s)
+    except Exception as e:
+        if raise_error:
+            raise
+        log.debug("ERROR parsing YAML for %s: %s", ref, e)
+        return None
+
+
+def _try_parse_json(s: str, ref: str, raise_error: bool = False):
+    try:
+        return json.loads(s)
+    except Exception as e:
+        if raise_error:
+            raise
+        log.debug("ERROR parsing JSON for %s: %s", ref, e)
+        return None
+
+
+def _try_parse_ini(
+    s: str, ref: str, raise_error: bool = False
+) -> Optional[Dict[str, Any]]:
+    parser = configparser.ConfigParser()
+    try:
+        parser.read_string("[__anonymous__]\n" + s)
+    except configparser.Error as e:
+        if raise_error:
+            raise
+        log.debug("ERROR parsing INI for %s: %s", ref, e)
         return None
     else:
-        return _validated_front_matter(config)
+        parsed = {
+            section: dict({key: _ini_val(val) for key, val in parser[section].items()})
+            for section in parser
+        }
+        anon = parsed.pop("__anonymous__", {})
+        defaults = parsed.pop("DEFAULT", None)
+        return {**anon, **parsed, **({"DEFAULT": defaults} if defaults else {})}
 
 
-def _validated_front_matter(config: Any) -> Optional[TestConfig]:
-    if not isinstance(config, dict):
-        log.warning(f"Unsupported front-matter type ({type(config)}), expected mapping")
-        return None
-    validated = {}
-    for key, val in config.items():
-        if not isinstance(val, (int, float, str)):
-            if _is_test_option(key):
-                log.warning(
-                    f"Unsupported test option type ({type(val)}) for {key}, "
-                    "expected a string or number"
-                )
-            continue
-        validated[key] = val
-    return validated
-
-
-def _try_parse_ini_front_matter(s: str):
-    p = configparser.ConfigParser()
+def _ini_val(s: str):
+    if s[:1] + s[-1:] in ("\"\"", "''"):
+        return s[1:-1]
+    s_lower = s.lower()
+    if s_lower in ("true", "yes", "on"):
+        return True
+    if s_lower in ("false", "no", "off"):
+        return False
     try:
-        p.read_string("[__gk__]\n" + s)
-    except configparser.Error:
-        return None
-    else:
-        return _validated_front_matter(dict(p["__gk__"]))
-
-
-def _try_parse_yaml_front_matter(s: str) -> TestConfig:
-    return {
-        key: val
-        for key, val in (_split_softparse_yaml_line(line) for line in s.split("\n"))
-        if _is_key_option(key)
-    }
-
-
-def _split_softparse_yaml_line(line: str):
-    parts = line.split(":", 2)
-    return _decode_softparse_yaml_kv(*parts) if len(parts) == 2 else ("", parts[0])
-
-
-def _decode_softparse_yaml_kv(key: str, val: str):
-    if _quoted(val):
-        return key, val[1:-1]
-    try:
-        return key, _float_or_int(val)
-    except:
-        return key, val
-
-
-def _quoted(s: str):
-    return s[:1] + s[-1:] in ('""', "''")
-
-
-def _float_or_int(val: str):
-    try:
-        return int(val)
+        return int(s)
     except ValueError:
-        return float(val)
+        try:
+            return float(s)
+        except ValueError:
+            return s
 
 
-def _parser_for_config(config: TestConfig):
+def _try_parse_simple_yaml(s: str, ref: str, raise_error: bool = False):
+    # INI format resembles YAML when ':' key/val delimiter is used
+    return _try_parse_ini(s, ref, raise_error)
+
+
+def _config_for_front_matter(fm: Any, ref: str):
+    assert False
+
+
+def _parser_for_config(config: Config):
     return _parser_for_front_config(config) or _default_parser()
 
 
-def _parser_for_front_config(config: TestConfig):
-    return _parser_for_test_format(config.get("test-format")) or _configured_parser(
-        config
-    )
+def _parser_for_front_config(config: Config):
+    assert False, config
 
 
 def _parser_for_test_format(format: Any):
@@ -223,7 +201,7 @@ def _parser_for_test_format(format: Any):
         raise FormatNotSupported(format)
 
 
-def _configured_parser(config: TestConfig):
+def _configured_parser(config: Config):
     # TODO: construct parser from config - e.g. `test-example-pattern`,
     # etc.
     return None
@@ -233,7 +211,7 @@ def _default_parser():
     return _parser_for_test_format("groktest")
 
 
-def _runtime_for_config(config: TestConfig):
+def _runtime_for_config(config: Config):
     pass
 
 
@@ -252,9 +230,36 @@ def test_file(filename: str):
         pull tests out
 
     """
-    state = init_runner_state(filename)
+    result = _maybe_doctest_bootstrap(filename)
+    if result is not None:
+        return result
 
+    state = init_runner_state(filename)
     print(f"TODO test {filename}")
+    return 0, 0
+
+
+def _maybe_doctest_bootstrap(filename: str):
+    contents = _read_file(filename)
+    fm = _parse_front_matter(contents, filename)
+    if fm.get("test-format") == "doctest":
+        return _doctest_file(filename)
+    return None
+
+
+def _doctest_file(filename: str):
+    import doctest
+
+    options = doctest.ELLIPSIS
+    return doctest.testfile(filename, module_relative=False, optionflags=options)
+
+
+def _init_logging(args: Any):
+    if args.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(levelname)s: [%(name)s] %(message)s",
+        )
 
 
 def main():
@@ -274,9 +279,24 @@ def main():
         metavar="FORMAT",
         help="Format to use for specified tests.",
     )
+    p.add_argument("--debug", action="store_true", help="Print debug info")
     args = p.parse_args()
+    _init_logging(args)
+
+    failed = tested = 0
+
     for filename in args.paths:
-        test_file(filename)
+        f, t = test_file(filename)
+        failed += f
+        tested += t
+
+    assert failed <= tested, (failed, tested)
+    if tested == 0:
+        print("Nothing tested")
+    elif failed == 0:
+        print("All tests passed 🔥")
+    else:
+        print("Tests failed - see above for details")
 
 
 if __name__ == "__main__":

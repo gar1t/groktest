@@ -1,3 +1,7 @@
+---
+test-format: doctest
+---
+
 # Groktest
 
 Groktest is a test framework that's inspired by Python's long standing
@@ -22,6 +26,12 @@ Differences to `doctest`:
 - Tests are not sensitive to white-space by default
 - Test options do not require a `doctest:` prefix
 - Front-matter in test files may be used to configure a test suite
+
+Less interesting differences:
+
+- The default prompt in Groktest is a single `> ` rather than `>>> `
+- The default line continuation token is `  ` (two spaces) rather than
+  `... `
 
 ### Why?
 
@@ -71,39 +81,84 @@ time to get this right. In order of priority, Groktest will support:
 
 ## Examples
 
-The simplest example is a
+The simplest example is an exact match.
 
     > 'The number 42 is overused in examples'
     'The number 42 is overused in examples'
 
-In `groktest` you can provide an assertion expression.
-
-
-    > 'The number 42 is overused in examples'
-    'The number {\ugh} is overused in examples'
-
-What about a more complex assertion?
+In `groktest` you can provide a *format expression*, which has the
+format `{[name][:format]}`. The following example asserts that the claim
+contains a series of digits.
 
     > 'The number 42 is overused in examples'
-    'The number {(?<x>\d+); {x >= 42} is overused in examples'
+    'The number {:d} is overused in examples'
 
-Binding output to an assertion variable:
+Matched values can be bound to local variables.
 
-    > 'foo is 123'
-    'foo is {(?<foo>\d+)}'
+    > 'The number 42 is overused in examples'
+    'The number {n} is overused in examples'
 
-    > 'bar is also 123'
-    bar is also {\k<foo>}
+    > n == 42
+    True
 
-Match anything:
+Output parsing is provided by Richard Jones' outstanding
+[`parse`](https://github.com/r1chardj0n3s/parse) library.
 
-    > 'The sun will eventually run out of fuel lol'
-    The sun will eventually {.*}
+To match anything, use `{}`.
 
-Match digits.
+    > 'Another tedious example is the use of "ham" and "spam"'
+    'Another tedious example is {}'
 
-    > '1 + 1 is 2'
-    {\d+} + {\d+} is {\d+}
+Multiline expressions are continued on subsequent lines by indenting two
+spaces.
+
+    > (1 +
+      2 + 4)
+    7
+
+Front matter is used to customize tests.
+
+    ---
+    test-format:
+      prompt: '>>> '
+      continue: '... '
+    ---
+
+    > This is not a test expression
+      Nor is this
+
+    >>> ('This is a test expression' +
+    ...  ' however')
+    'This is a test expression however'
+
+Note the default use of `> ` for prompts does not conflict with
+Markdown's block quote syntax when examples are indented. Groktest
+recommends indenting all tests using four spaces in Markdown files.
+
+Custom format types may be defined in test font matter.
+
+    ---
+    test-format:
+      parse-types:
+        id: [a-f0-9]{8}
+    ---
+
+    > 'Sample id is abcd1234'
+    Sample id is {:id}
+
+## Testing Groktest
+
+Tests are defined in the documentation files. They can be run using
+`groktest`.
+
+    $ groktest *.md
+
+## What works?
+
+A this point Groktest is in early development and nothing much of use is
+available.
+
+Refer to [`tests.md`](tests.md) for current project status.
 
 ## Contributing
 
@@ -117,11 +172,13 @@ the meantime, use the following guidelines:
 
 2. Contributions will be accepted via pull requests.
 
-3. All source code is formatted using `black` - expect any contribution
+3. All tests in [`tests.md`](tests.md) should pass.
+
+4. All source code is formatted using `black` - expect any contribution
    to be reformatted on this basis.
 
-4. Before working on a contribution, we recommend opening an issue to
+5. Before working on a contribution, we recommend opening an issue to
    get early feedback.
 
-5. We expect contributors to follow generally accepted standards of
+6. We expect contributors to follow generally accepted standards of
    respect and kindness to others.

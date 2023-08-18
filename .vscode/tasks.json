@@ -5,11 +5,17 @@
   "problemMatcher": {
     "owner": "groktest",
     "fileLocation": "absolute",
-    "pattern": {
-      "regexp": "^File \"(.*)\", line (\\d+)",
-      "file": 1,
-      "line": 2
-    }
+    "pattern": [
+      {
+        "regexp": "^File \"(.*)\", line (\\d+)",
+        "file": 1,
+        "line": 2
+      },
+      {
+        "regexp": "^(Failed example)",
+        "message": 1
+      }
+    ]
   },
   "presentation": {
     "revealProblems": "onProblem",
@@ -20,10 +26,17 @@
 
   "tasks": [
     {
-      "label": "Run Current as Doctest",
-      "type": "shell",
-      "command": "python",
-      "args": ["-m", "doctest", "${file}"]
-    }
+      "label": "Run Current as Groktest",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "groktest", "${file}"]
+    },
+    {
+        "label": "Run All Tests",
+        "type": "process",
+        "command": "${command:python.interpreterPath}",
+        "args": ["-m", "groktest", "README.md", "implementation.md"]
+      }
+
   ]
 }

@@ -1,0 +1,317 @@
+---
+test-format: doctest
+---
+
+# Groktest Implementation
+
+## Customizer API
+
+A *customizer* is someone who customizes Groktest to provide new or
+modified behavior.
+
+- Languages
+- Pattern match schemes
+- Pattern features
+
+TODO
+
+## Internal API
+
+The tests in this section demonstrate internal Groktest behavior. These
+may be considered unit tests.
+
+    >>> import groktest
+
+### Parsing front matter
+
+Front matter is denoted by a line `---` at the start of the file
+followed by a subseuqnet line `---`.
+
+Front matter is matched using `groktest._FRONT_MATTER_P`.
+
+    >>> def match(s):
+    ...     m = groktest._FRONT_MATTER_P.match(s)
+    ...     if m:
+    ...         if m.group(1):
+    ...             print(m.group(1))
+    ...         else:
+    ...             print("<empty>")
+    ...     else:
+    ...         print("<none>")
+
+Failed matches:
+
+    >>> match("")
+    <none>
+
+    >>> match("---\n---")
+    <none>
+
+    >>> match("xxx\n---\n---")
+    <none>
+
+Matches:
+
+    >>> match("\n---\n\n---")
+    <empty>
+
+    >>> match("\n---\n\n---\n")
+    <empty>
+
+    >>> match("\n\n---\n\n---")
+    <empty>
+
+    >>> match("\n---\n\n---\n")
+    <empty>
+
+    >>> match("\n---\nxxx\n---\n")
+    xxx
+
+    >>> match("\n---\n\n---\nxxx")
+    <empty>
+
+    >>> match("\n---\nxxx\n---\nyyy")
+    xxx
+
+    >>> match("\n---\nxxx\nyyy\n---\n")
+    xxx
+    yyy
+
+    >>> match("""
+    ... ---
+    ... foo: 123
+    ... bar: 456
+    ... baz:
+    ...   foo: 321
+    ...   bar: 654
+    ... ---
+    ... """)
+    foo: 123
+    bar: 456
+    baz:
+      foo: 321
+      bar: 654
+
+    >>> match("""
+    ... ---
+    ... { "foo": 123, "bar": 456, "baz": {
+    ...   "foo": 321,
+    ...   "bar": 654
+    ... }}
+    ... ---
+    ... """)
+    { "foo": 123, "bar": 456, "baz": {
+      "foo": 321,
+      "bar": 654
+    }}
+
+The function `_parse_front_matter()` parses front matter specified in a
+string.
+
+    >>> def fm(s: str):
+    ...     from pprint import pprint
+    ...     pprint(groktest._parse_front_matter(s, "<test>"))
+
+
+Missing front matter:
+
+    >>> fm("")
+    {}
+
+    >>> fm("Nothing to see here")
+    {}
+
+Groktest does not consider Markdown "comments" as 'empty lines'.
+
+    >>> fm("""
+    ... <!-- This is a valid comment in Markdown -->
+    ... ---
+    ... foo: 123 # Not parsed as Groktest front matter
+    ... ---
+    ... """)
+    {}
+
+Simple YAML:
+
+    >>> fm("""
+    ... ---
+    ... foo: 123
+    ... bar: hello
+    ... ---
+    ... """)
+    {'bar': 'hello', 'foo': 123}
+
+JSON:
+
+    >>> fm("""
+    ... ---
+    ... {
+    ...   "foo": 123,
+    ...   "bar": "hello"
+    ... }
+    ... ---
+    ... """)
+    {'bar': 'hello', 'foo': 123}
+
+INI:
+
+    >>> fm("""
+    ... ---
+    ... foo = 123
+    ... bar = hello
+    ... ---
+    ... """)
+    {'bar': 'hello', 'foo': 123}
+
+The sections below illustrate more complex examples of various formats.
+
+#### Simple YAML
+
+Groktest supports simple YAML front matter without dependencies on
+PyYAML. For full YAML support, PyYAML must be installed. See
+[yaml-support.md](yaml-support.md) for details on parsing full YAML.
+
+For the tests below we use `_try_parse_simple_yaml` to explicit parse
+using the PyYAML independent routine.
+
+    >>> def parse_simple_yaml(s):
+    ...     from pprint import pprint
+    ...     pprint(groktest._try_parse_simple_yaml(s, "<test>", raise_error=True))
+
+    >>> parse_simple_yaml("""
+    ... i: 123
+    ... f: 1.123
+    ... s1: hello
+    ... s2: 'a quoted value'
+    ... s3: "another quoted value"
+    ... b1: true
+    ... b2: yes
+    ... b3: false
+    ... b4: no
+    ... """)
+    {'b1': True,
+     'b2': True,
+     'b3': False,
+     'b4': False,
+     'f': 1.123,
+     'i': 123,
+     's1': 'hello',
+     's2': 'a quoted value',
+     's3': 'another quoted value'}
+
+Any other types are treated as strings.
+
+    >>> parse_simple_yaml("""
+    ... s1: [1, 2, 3]
+    ... s2: {foo: 123, bar: 456}
+    ... """)
+    {'s1': '[1, 2, 3]', 's2': '{foo: 123, bar: 456}'}
+
+In the simple YAML support, comments can only appear on separate lines.
+
+    >>> parse_simple_yaml("""
+    ... # This is a comment
+    ... foo: 123
+    ... """)
+    {'foo': 123}
+
+    >>> parse_simple_yaml("""
+    ... foo: 123  # this is not a comment
+    ... """)
+    {'foo': '123  # this is not a comment'}
+
+#### JSON
+
+    >>> def parse_json(s):
+    ...     from pprint import pprint
+    ...     pprint(groktest._try_parse_json(s, "<test>", raise_error=True))
+
+    >>> parse_json("1")
+    1
+
+    >>> parse_json("{}")
+    {}
+
+    >>> parse_json("not valid JSON")
+    Traceback (most recent call last):
+    json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+    >>> parse_json("""
+    ... {
+    ...   "test-format": {
+    ...     "prompt": ">>> ",
+    ...     "continue": "... ",
+    ...     "parse-types": {
+    ...       "id": "[a-f0-9]{8}"
+    ...     }
+    ...   }
+    ... }
+    ... """)
+    {'test-format': {'continue': '... ',
+                     'parse-types': {'id': '[a-f0-9]{8}'},
+                     'prompt': '>>> '}}
+
+#### INI
+
+INI based config supported using the `configparser` module.
+
+    >>> def parse_ini(s):
+    ...     from pprint import pprint
+    ...     pprint(groktest._try_parse_ini(s, "<test>", raise_error=True))
+
+    >>> parse_ini("""
+    ... [test-format]
+    ... prompt: '>>> '
+    ... continue: '... '
+    ...
+    ... [test-format.parse-types]
+    ... id: [a-f0-9]{8}
+    ... """)
+    {'test-format': {'continue': '... ', 'prompt': '>>> '},
+     'test-format.parse-types': {'id': '[a-f0-9]{8}'}}
+
+Indented sections are not supported.
+
+    >>> parse_ini("""
+    ... [foo]
+    ...   [bar]
+    ...   baz: 123
+    ... """)
+    {'bar': {'baz': 123}, 'foo': {}}
+
+#### TOML
+
+This section should self-destruct if not modified in 24 months.
+
+TOML is supported insofar as it complies with the INI convention. E.g.
+intended sections are not supported (see below).
+
+Proper TOML support may be added if desired using a TOML parser.
+However, this support must be made optional, as with full YAML support,
+to avoid a dependency on an external library.
+
+Note that TOML support is slated for Python 3.11. This could be one way
+to avoid a dependency on another library, however, it would incur a
+dependency on Python 3.11.
+
+It's not clear that TOML support is needed.
+
+### Runner state
+
+TODO
+
+Runner state an internal construct Groktest uses when running tests.
+
+    >> state = groktest.init_runner_state("examples/doctest.md")
+
+Groktest loads the specified file and initializes runner state.
+
+TODO
+
+#### Errors
+
+A file must exist.
+
+    >>> groktest.init_runner_state("does_not_exist")
+    Traceback (most recent call last):
+    FileNotFoundError: [Errno 2] No such file or directory: 'does_not_exist'
