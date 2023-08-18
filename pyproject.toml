@@ -1,0 +1,25 @@
+[project]
+
+name = "groktest"
+version = "0.1.0"
+authors = [
+  { name="Garrett Smith", email="garrett@placeon.earth" },
+]
+description = "Literate testing framework based on Python doctest"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+
+groktest = "groktest:main"
+
+
+[project.urls]
+
+"Homepage" = "https://github.com/gar1t/groktest"
+"Bug Tracker" = "https://github.com/gar1t/groktest/issues"

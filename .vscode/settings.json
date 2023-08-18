@@ -1,0 +1,13 @@
+{
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportUntypedFunctionDecorator": "none",
+    "reportUnusedImport": "warning",
+    "reportGeneralTypeIssues": "warning",
+    "reportUnknownParameterType": "warning",
+    "reportMissingParameterType": "warning",
+    "reportWildcardImportFromLibrary": "none"
+  }
+}
