@@ -239,17 +239,14 @@ In the simple YAML support, comments can only appear on separate lines.
     >>> parse_json("""
     ... {
     ...   "test-format": {
-    ...     "prompt": ">>> ",
-    ...     "continue": "... ",
+    ...     "ps1": "> ",
     ...     "parse-types": {
     ...       "id": "[a-f0-9]{8}"
     ...     }
     ...   }
     ... }
     ... """)
-    {'test-format': {'continue': '... ',
-                     'parse-types': {'id': '[a-f0-9]{8}'},
-                     'prompt': '>>> '}}
+    {'test-format': {'parse-types': {'id': '[a-f0-9]{8}'}, 'ps1': '> '}}
 
 #### INI
 
@@ -261,14 +258,12 @@ INI based config supported using the `configparser` module.
 
     >>> parse_ini("""
     ... [test-format]
-    ... prompt: '>>> '
-    ... continue: '... '
+    ... ps1: '> '
     ...
     ... [test-format.parse-types]
     ... id: [a-f0-9]{8}
     ... """)
-    {'test-format': {'continue': '... ', 'prompt': '>>> '},
-     'test-format.parse-types': {'id': '[a-f0-9]{8}'}}
+    {'test-format': {'ps1': '> '}, 'test-format.parse-types': {'id': '[a-f0-9]{8}'}}
 
 Indented sections are not supported.
 

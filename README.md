@@ -27,12 +27,6 @@ Differences to `doctest`:
 - Test options do not require a `doctest:` prefix
 - Front-matter in test files may be used to configure a test suite
 
-Less interesting differences:
-
-- The default prompt in Groktest is a single `> ` rather than `>>> `
-- The default line continuation token is `  ` (two spaces) rather than
-  `... `
-
 ### Why?
 
 Python's `doctest` paved the way for computational documents like
@@ -83,22 +77,22 @@ time to get this right. In order of priority, Groktest will support:
 
 The simplest example is an exact match.
 
-    > 'The number 42 is overused in examples'
+    >>> 'The number 42 is overused in examples'
     'The number 42 is overused in examples'
 
 In `groktest` you can provide a *format expression*, which has the
 format `{[name][:format]}`. The following example asserts that the claim
 contains a series of digits.
 
-    > 'The number 42 is overused in examples'
+    >>> 'The number 42 is overused in examples'  # doctest: +SKIP
     'The number {:d} is overused in examples'
 
 Matched values can be bound to local variables.
 
-    > 'The number 42 is overused in examples'
+    >>> 'The number 42 is overused in examples'  # doctest: +SKIP
     'The number {n} is overused in examples'
 
-    > n == 42
+    >>> n == 42  # doctest: +SKIP
     True
 
 Output parsing is provided by Richard Jones' outstanding
@@ -106,34 +100,30 @@ Output parsing is provided by Richard Jones' outstanding
 
 To match anything, use `{}`.
 
-    > 'Another tedious example is the use of "ham" and "spam"'
+    >>> 'Another tedious example is the use of "ham" and "spam"'
+    ... # doctest: +SKIP
     'Another tedious example is {}'
 
-Multiline expressions are continued on subsequent lines by indenting two
-spaces.
+Multiline expressions are continued on subsequent lines using `...`.
 
-    > (1 +
-      2 + 4)
+    >>> (1 +
+    ... 2 + 4)
     7
 
 Front matter is used to customize tests.
 
     ---
     test-format:
-      prompt: '>>> '
-      continue: '... '
+      ps1: '> '
+      ps2: '+ '
     ---
 
-    > This is not a test expression
-      Nor is this
+    > "This should be familiar
+    + to R developers"
 
-    >>> ('This is a test expression' +
-    ...  ' however')
-    'This is a test expression however'
-
-Note the default use of `> ` for prompts does not conflict with
-Markdown's block quote syntax when examples are indented. Groktest
-recommends indenting all tests using four spaces in Markdown files.
+Aside: In this case the use of `>` conflicts with Markdown's syntax for
+block quotes. We recommend indenting tests with four spaces in Markdown
+files.
 
 Custom format types may be defined in test font matter.
 
@@ -143,7 +133,7 @@ Custom format types may be defined in test font matter.
         id: [a-f0-9]{8}
     ---
 
-    > 'Sample id is abcd1234'
+    >>> 'Sample id is abcd1234'  # doctest: +SKIP
     Sample id is {:id}
 
 ## Testing Groktest

@@ -32,11 +32,15 @@
       "args": ["-m", "groktest", "${file}"]
     },
     {
-        "label": "Run All Tests",
-        "type": "process",
-        "command": "${command:python.interpreterPath}",
-        "args": ["-m", "groktest", "README.md", "implementation.md"]
-      }
-
+      "label": "Run All Tests",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "groktest",
+        "${workspaceFolder}/README.md",
+        "${workspaceFolder}/implementation.md"
+      ]
+    }
   ]
 }
