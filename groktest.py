@@ -256,6 +256,8 @@ def parse_tests(content: str, config: Config, filename: str):
     for m in config.test_pattern.finditer(content):
         linepos += content.count("\n", charpos, m.start())
         tests.append(_test_for_match(m, config, linepos, filename))
+        linepos += content.count('\n', m.start(), m.end())
+        charpos = m.end()
     return cast(List[Test], tests)
 
 
@@ -290,7 +292,7 @@ def _strip_prompt(s: str, prompt: str, linepos: int, filename: str):
             f"File \"{filename}\", line {linepos + 1}, in test: "
             "space missing after prompt"
         )
-    return s[prompt_len + 1:]
+    return s[prompt_len + 1 :]
 
 
 def _format_expected(m: Match[str], linepos: int, filename: str):

@@ -360,9 +360,11 @@ Multi-line expression and expected:
 ##### Test parsing
 
     >>> def py_tests(s):
-    ...     for test in groktest.parse_tests(
+    ...     for i, test in enumerate(groktest.parse_tests(
     ...         s, groktest.PYTHON_CONFIG, "<test>"
-    ...     ):
+    ...     )):
+    ...         if i > 0:
+    ...             print("---")
     ...         print(f"line {test.source.line} in {test.source.filename}")
     ...         print(f"expr: {test.expr!r}")
     ...         print(f"expected: {test.expected!r}")
@@ -386,6 +388,66 @@ Multi-line expression and expected:
     line 2 in <test>
     expr: "print('''1\n2''')"
     expected: '1\n2'
+
+    >>> py_tests("""
+    ... Some addition:
+    ...
+    ...     >>> 1 + 1
+    ...     2
+    ...
+    ... Print some lines:
+    ...
+    ...     >>> print(
+    ...     ...     "hello\\n"
+    ...     ...     "there"
+    ...     ... )
+    ...     hello
+    ...     there
+    ...
+    ... And a test with no expected result:
+    ...
+    ...     >>> _ = os.listdir()
+    ... """)
+    line 4 in <test>
+    expr: '1 + 1'
+    expected: '2'
+    ---
+    line 9 in <test>
+    expr: 'print(\n    "hello\\n"\n    "there"\n)'
+    expected: 'hello\nthere'
+    ---
+    line 18 in <test>
+    expr: '_ = os.listdir()'
+    expected: ''
+
+Lines following the first line of a test must be indented at least as
+much.
+
+    >>> py_tests("""
+    ...   >>> 1
+    ...  1
+    ... """)
+    Traceback (most recent call last):
+    ValueError: File "<test>", line 2, in test: inconsistent leading
+    whitespace
+
+Prompts must be followed by at least one space char.
+
+    >>> py_tests("""
+    ...   >>>1
+    ...   1
+    ... """)
+    Traceback (most recent call last):
+    ValueError: File "<test>", line 2, in test: space missing after
+    prompt
+
+    >>> py_tests("""
+    ...   >>> print(
+    ...   ..."hello")
+    ... """)
+    Traceback (most recent call last):
+    ValueError: File "<test>", line 3, in test: space missing after
+    prompt
 
 ### Runner state
 
