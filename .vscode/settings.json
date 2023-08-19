@@ -9,5 +9,8 @@
     "reportUnknownParameterType": "warning",
     "reportMissingParameterType": "warning",
     "reportWildcardImportFromLibrary": "none"
-  }
+  },
+  "black-formatter.args": [
+    "--skip-string-normalization"
+  ]
 }

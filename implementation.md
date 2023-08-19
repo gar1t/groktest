@@ -6,7 +6,7 @@ test-type: doctest
 
 ## Customizer API
 
-A *customizer* is someone who customizes Groktest to provide new or
+A _customizer_ is someone who customizes Groktest to provide new or
 modified behavior.
 
 - Languages
@@ -109,9 +109,7 @@ The function `_parse_front_matter()` parses front matter specified in a
 string.
 
     >>> def fm(s: str):
-    ...     from pprint import pprint
     ...     pprint(groktest._parse_front_matter(s, "<test>"))
-
 
 Missing front matter:
 
@@ -175,7 +173,6 @@ For the tests below we use `_try_parse_simple_yaml` to explicit parse
 using the PyYAML independent routine.
 
     >>> def parse_simple_yaml(s):
-    ...     from pprint import pprint
     ...     pprint(groktest._try_parse_simple_yaml(s, "<test>", raise_error=True))
 
     >>> parse_simple_yaml("""
@@ -223,7 +220,6 @@ In the simple YAML support, comments can only appear on separate lines.
 #### JSON
 
     >>> def parse_json(s):
-    ...     from pprint import pprint
     ...     pprint(groktest._try_parse_json(s, "<test>", raise_error=True))
 
     >>> parse_json("1")
@@ -253,7 +249,6 @@ In the simple YAML support, comments can only appear on separate lines.
 INI based config supported using the `configparser` module.
 
     >>> def parse_ini(s):
-    ...     from pprint import pprint
     ...     pprint(groktest._try_parse_ini(s, "<test>", raise_error=True))
 
     >>> parse_ini("""
@@ -290,6 +285,107 @@ to avoid a dependency on another library, however, it would incur a
 dependency on Python 3.11.
 
 It's not clear that TOML support is needed.
+
+### Parsing tests
+
+Test parsing is implemented with the help of regular expressions, which
+must be provided as test configuration.
+
+Groktest required regular expressions for the following:
+
+- Test definition (a test expression and corresponding expected result)
+- Test options (comment based configuration per test)
+- Error messages
+
+Test definitions must use three named capture groups:
+
+- `expr`
+- `indent`
+- `expected`
+
+`testexpr` captures the test expression, which may span multiple lines.
+Typically a test expression scheme makes use of PS1 and PS2 prompt
+strings to denote the first line and subsequent lines respective.
+
+`indent` captures the sequence of space chars (` `) used to offset the
+first line of the test. All subsequent lines associated with the test
+are required to use the same indent level.
+
+`expected` captures the expected result of the test.
+
+#### Common parsing behavior
+
+Groktest applies common test parsing behavior across all supported
+tests.
+
+Tests must be indented as a block using the first line indent.
+
+#### Python
+
+Default support for Python tests follows `doctest` in syntax.
+
+##### Test pattern matching
+
+    >>> def py_tests_m(s):
+    ...     for m in groktest.PYTHON_CONFIG.test_pattern.finditer(s):
+    ...         pprint(m.groupdict())
+
+Single line test expression, no expexted output, no indent:
+
+    >>> py_tests_m(">>> None")
+    {'expected': '', 'expr': '>>> None', 'indent': ''}
+
+Single line test expression, single line expected result, no indent:
+
+    >>> py_tests_m(">>> 1\n1")
+    {'expected': '1', 'expr': '>>> 1', 'indent': ''}
+
+Same test with two-space indent:
+
+    >>> py_tests_m("  >>> 1\n1")
+    {'expected': '1', 'expr': '  >>> 1', 'indent': '  '}
+
+Multi-line expression and expected:
+
+    >>> py_tests_m("""
+    ...   >>> print('''1
+    ...   ... 2''')
+    ...   1
+    ...   2
+    ... """)
+    {'expected': '  1\n  2\n',
+     'expr': "  >>> print('''1\n  ... 2''')",
+     'indent': '  '}
+
+##### Test parsing
+
+    >>> def py_tests(s):
+    ...     for test in groktest.parse_tests(
+    ...         s, groktest.PYTHON_CONFIG, "<test>"
+    ...     ):
+    ...         print(f"line {test.source.line} in {test.source.filename}")
+    ...         print(f"expr: {test.expr!r}")
+    ...         print(f"expected: {test.expected!r}")
+
+    >>> py_tests(">>> None")
+    line 1 in <test>
+    expr: 'None'
+    expected: ''
+
+    >>> py_tests(">>> 1\n1")
+    line 1 in <test>
+    expr: '1'
+    expected: '1'
+
+    >>> py_tests("""
+    ...   >>> print('''1
+    ...   ... 2''')
+    ...   1
+    ...   2
+    ... """)
+    line 2 in <test>
+    expr: "print('''1\n2''')"
+    expected: '1\n2'
 
 ### Runner state
 
