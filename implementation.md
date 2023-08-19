@@ -369,15 +369,21 @@ Multi-line expression and expected:
     ...         print(f"expr: {test.expr!r}")
     ...         print(f"expected: {test.expected!r}")
 
+One line expression, nothing expected:
+
     >>> py_tests(">>> None")
     line 1 in <test>
     expr: 'None'
     expected: ''
 
+One line expression, one line of expected output:
+
     >>> py_tests(">>> 1\n1")
     line 1 in <test>
     expr: '1'
     expected: '1'
+
+Multi-line expression, multiple lines of outout:
 
     >>> py_tests("""
     ...   >>> print('''1
@@ -388,6 +394,8 @@ Multi-line expression and expected:
     line 2 in <test>
     expr: "print('''1\n2''')"
     expected: '1\n2'
+
+Multi-test example:
 
     >>> py_tests("""
     ... Some addition:
