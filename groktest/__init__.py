@@ -4,11 +4,31 @@ from __future__ import annotations
 
 from typing import *
 
+import importlib
 import json
 import configparser
 import logging
-import os
 import re
+
+from ._vendor_parse import parse
+from ._vendor_parse import Result as ParseResult
+
+__all__ = [
+    "Config",
+    "CONFIG",
+    "init_runner_state",
+    "init_runtime",
+    "match_test_output",
+    "parse_tests",
+    "PYTHON_CONFIG",
+    "RunnerState",
+    "Runtime",
+    "RUNTIME",
+    "test_file",
+    "Test",
+    "TestResult",
+    "TestSource",
+]
 
 log = logging.getLogger("groktest")
 
@@ -56,19 +76,46 @@ class Test:
         self.source = source
 
 
+class TestResult:
+    def __init__(self, code: int, output: str):
+        self.code = code
+        self.output = output
+
+
 class Runtime:
-    def apply_test(self, test: Test, state: RunnerState):
-        raise NotImplemented()
+    def run_test(self, test: Test) -> TestResult:
+        raise NotImplementedError()
+
+    def handle_bound_variables(self, bound_variables: Dict[str, Any]) -> None:
+        raise NotImplementedError()
+
+    def shutdown(self, timeout: int = 0) -> None:
+        raise NotImplementedError()
+
+    def is_available(self) -> bool:
+        raise NotImplementedError()
 
 
-class PythonRuntime(Runtime):
-    pass
+class RuntimeScope:
+    def __init__(self, runtime: Runtime, shutdown_timeout: Optional[int] = None):
+        self.runtime = runtime
+        self.shutdown_timeout = shutdown_timeout
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc: Any):
+        if self.shutdown_timeout is not None:
+            self.runtime.shutdown(self.shutdown_timeout)
+        else:
+            self.runtime.shutdown()
 
 
 class RunnerState:
-    def __init__(self, tests: List[Test], runtime: Runtime):
-        self.tests = tests
+    def __init__(self, config: Config, runtime: Runtime, tests: List[Test]):
+        self.config = config
         self.runtime = runtime
+        self.tests = tests
         self.results: Dict[str, Any] = {"failed": 0, "tested": 0}
 
 
@@ -98,16 +145,16 @@ PYTHON_CONFIG = DEFAULT_CONFIG = Config(
 
 CONFIG: Dict[str, Config] = {"python": PYTHON_CONFIG}
 
-RUNTIME = {"python": PythonRuntime()}
+RUNTIME = {"python": "groktest.python.PythonRuntime"}
 
 
 def init_runner_state(filename: str):
     contents = _read_file(filename)
     fm = _parse_front_matter(contents, filename)
     config = _config_for_front_matter(fm, filename)
-    runtime = _runtime_for_config(config)
+    runtime = init_runtime(config)
     tests = parse_tests(contents, config, filename)
-    return RunnerState(tests, runtime)
+    return RunnerState(config, runtime, tests)
 
 
 def _read_file(filename: str):
@@ -328,22 +375,63 @@ def _check_test_indent(lines: List[str], indent: int, linepos: int, filename: st
             )
 
 
-def _runtime_for_config(config: Config):
+def init_runtime(config: Config):
     try:
-        return RUNTIME[config.runtime]
+        import_spec = RUNTIME[config.runtime]
     except KeyError:
         raise RuntimeNotSupported(config.runtime)
+    else:
+        if "." not in import_spec:
+            raise ValueError(config.runtime)
+        modname, classname = import_spec.rsplit(".", 1)
+        mod = importlib.import_module(modname)
+        rt = getattr(mod, classname)()
+        rt.init(config)
+        return rt
 
 
 def test_file(filename: str):
+    # Until Groktest supports doctest format, punt to real doctest
     result = _maybe_doctest_bootstrap(filename)
     if result is not None:
         return result
 
     state = init_runner_state(filename)
-    for test in state.tests:
-        state.runtime.apply_test(test, state)
-    return state.results
+    with RuntimeScope(state.runtime):
+        for test in state.tests:
+            result = state.runtime.run_test(test)
+            _handle_test_result(result, test, state)
+        return state.results
+
+
+def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
+    # TODO: compare result.output to test.expected to determine if the
+    # test passed or failed and to collect any bound variables
+    match = match_test_output(result.output, test.expected, state.config)
+    if match:
+        _handle_test_passed(test, match.named, state)
+    else:
+        _handle_test_failed(test, result, state)
+
+
+def match_test_output(output: str, expected: str, config: Config):
+    # TODO use config to create extra types
+    return cast(Optional[ParseResult], parse(expected, output))
+
+
+def _handle_test_passed(
+    test: Test, bound_variables: Dict[str, Any], state: RunnerState
+):
+    state.runtime.handle_bound_variables(bound_variables)
+    state.results["tested"] += state.results["tested"]
+
+
+def _handle_test_failed(test: Test, result: TestResult, state: RunnerState):
+    print("Some test failed")
+    print(f"Expected: {test.expected}")
+    print(f"Got: {result.output}")
+    state.results["failed"] += state.results["failed"]
+    state.results["tested"] += state.results["tested"]
 
 
 def _maybe_doctest_bootstrap(filename: str):
@@ -371,83 +459,3 @@ def _doctest_file(filename: str):
         optionflags=options,
         extraglobs=globs,
     )
-
-
-def _main_init_logging(args: Any):
-    if args.debug:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(levelname)s: [%(name)s] %(message)s",
-        )
-
-
-def _main_test_filenames(args: Any):
-    if args.last:
-        last = _main_last()
-        if not last:
-            raise SystemExit(
-                "last not found - run at least one test before using '--last'"
-            )
-        return last
-    return args.paths
-
-
-def _main_last():
-    try:
-        f = open(_main_last_savefile())
-    except FileNotFoundError:
-        return None
-    else:
-        with f:
-            return json.load(f)
-
-
-def _main_save_last(filenames: List[str]):
-    with open(_main_last_savefile(), "w") as f:
-        json.dump(filenames, f)
-
-
-def _main_last_savefile():
-    import tempfile
-
-    return os.path.join(tempfile.gettempdir(), "groktest.last")
-
-
-def main():
-    import argparse
-
-    p = argparse.ArgumentParser()
-    p.add_argument(
-        "paths",
-        metavar="PATH",
-        type=str,
-        help="file to test",
-        nargs="*",
-    )
-    p.add_argument("--last", action="store_true", help="re-run last tests")
-    p.add_argument("--debug", action="store_true", help="show debug info")
-    args = p.parse_args()
-    _main_init_logging(args)
-
-    failed = tested = 0
-
-    to_run = _main_test_filenames(args)
-    _main_save_last(to_run)
-
-    for filename in to_run:
-        print(f"Testing {filename}")
-        result = test_file(filename)
-        failed += result["failed"]
-        tested += result["tested"]
-
-    assert failed <= tested, (failed, tested)
-    if tested == 0:
-        print("Nothing tested")
-    elif failed == 0:
-        print("All tests passed 🔥")
-    else:
-        print("Tests failed - see above for details")
-
-
-if __name__ == "__main__":
-    main()

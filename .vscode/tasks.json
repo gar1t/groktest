@@ -53,7 +53,8 @@
         "-m",
         "groktest",
         "${workspaceFolder}/README.md",
-        "${workspaceFolder}/implementation.md"
+        "${workspaceFolder}/docs/implementation.md",
+        "${workspaceFolder}/docs/python.md"
       ]
     }
   ],
@@ -65,7 +66,8 @@
       "description": "Project test",
       "options": [
         "README.md",
-        "implementation.md",
+        "docs/implementation.md",
+        "docs/python.md",
         "examples/doctest.md",
         "examples/simple.md",
         "examples/unkown-format.md"

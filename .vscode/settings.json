@@ -1,7 +1,10 @@
 {
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter"
-    },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+  "python.analysis.ignore": [
+    "groktest/_vendor_parse.py"
+  ],
   "python.analysis.diagnosticSeverityOverrides": {
     "reportUntypedFunctionDecorator": "none",
     "reportUnusedImport": "warning",
@@ -10,7 +13,5 @@
     "reportMissingParameterType": "warning",
     "reportWildcardImportFromLibrary": "none"
   },
-  "black-formatter.args": [
-    "--skip-string-normalization"
-  ]
+  "black-formatter.args": ["--skip-string-normalization"]
 }

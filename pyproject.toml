@@ -16,7 +16,7 @@ classifiers = [
 
 [project.scripts]
 
-groktest = "groktest:main"
+groktest = "groktest.__main__:main"
 
 
 [project.urls]
