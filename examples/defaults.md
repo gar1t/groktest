@@ -10,16 +10,22 @@
     ...  1)
     2
 
-Use a single dot (`.`) in place of expected blank lines. This is
+Use a single pipe (`|`) in place of expected blank lines. This is
 equivalent to `<BLANKLINE>` in `doctest`.
 
-    >>> print("foo\n\nbar\n")
+    >>> print("""
+    ... foo
+    ...
+    ... bar
+    ... """)
+    |
     foo
-    .
+    |
     bar
-    .
+    |
 
-To match a literal dot on a single line, use the match type `dot`.
+To match a literal pipe char on a single line, use the match type
+`pipe`.
 
-    >>> print(".")
-    {:dot}
+    >>> print("|")
+    {:pipe}

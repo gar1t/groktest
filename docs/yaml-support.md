@@ -2,6 +2,14 @@
 test-type: doctest
 ---
 
+TODO:
+ - How to skip tests based on test for PyYAML? This is not possible with
+   doctest but we could support front-matter to test. But what's a
+   generalized method that doesn't require custom framework mods?
+
+   In Groktest support, we could support an option that indicates the
+   remaining tests should be skipped, causing the test to be "skipped".
+
 # Full YAML support
 
 Groktest supports YAML based front matter configuration if PyYAML is

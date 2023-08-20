@@ -158,7 +158,7 @@ PYTHON_CONFIG = DEFAULT_CONFIG = Config(
     ps1=">>>",
     ps2="...",
     test_pattern=DEFAULT_TEST_PATTERN,
-    blank_line=".",
+    blank_line="|",
     match_types={},
 )
 
@@ -353,7 +353,7 @@ def _strip_prompts(lines: List[str], config: Config, linepos: int, filename: str
 def _strip_prompt(s: str, prompt: str, linepos: int, filename: str):
     assert s.startswith(prompt), (s, filename, linepos, prompt)
     prompt_len = len(prompt)
-    if s[prompt_len] != ' ':
+    if len(s) > prompt_len and s[prompt_len] != ' ':
         raise ValueError(
             f"File \"{filename}\", line {linepos + 1}, in test: "
             "space missing after prompt"
@@ -460,7 +460,7 @@ def _parselib_user_match_types(match_types: MatchTypes):
 
 
 def _parselib_builtin_match_types():
-    return {"dot": _parselib_regex_converter(r"\.")}
+    return {"pipe": _parselib_regex_converter(r"\|")}
 
 
 def _parselib_regex_converter(pattern: str):
@@ -507,15 +507,13 @@ def _print_test_expr(s: str):
 
 def _print_test_expected(s: str, config: Config):
     for line in s.split("\n"):
-        blankline_qualifier = f" (blank line)" if line == config.blank_line else ""
-        print(f"    {line}{blankline_qualifier}")
+        print("    " + line)
 
 
 def _print_test_result_output(s: str, config: Config):
     s = re.sub(r"^[ \t]*$", config.blank_line, s, 0, re.MULTILINE)
     for line in s.split("\n"):
-        literal_qualifier = f" (literal)" if line == config.blank_line else ""
-        print(f"    {line}{literal_qualifier}")
+        print("    " + line)
 
 
 def _maybe_doctest_bootstrap(filename: str):

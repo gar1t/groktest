@@ -136,19 +136,14 @@ Custom format types may be defined in test font matter.
     >>> 'Sample id is abcd1234'  # doctest: +SKIP
     Sample id is {:id}
 
-## Testing Groktest
-
-Tests are defined in the documentation files. They can be run using
-`groktest`.
-
-    $ groktest *.md
-
 ## What works?
 
 A this point Groktest is in early development and nothing much of use is
 available.
 
-Refer to [`tests.md`](tests.md) for current project status.
+Refer to Groktest tests to see what works. Run them to verify!
+
+    $ groktest *.md docs/*.md
 
 ## Contributing
 
