@@ -39,7 +39,7 @@ Use the runtime to run tests.
     0
 
     >>> result.output
-    '2\n'
+    '2'
 
 Shut down the runtime.
 

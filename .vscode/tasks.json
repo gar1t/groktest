@@ -69,7 +69,7 @@
         "docs/implementation.md",
         "docs/python.md",
         "examples/doctest.md",
-        "examples/simple.md",
+        "examples/defaults.md",
         "examples/unkown-format.md"
       ]
     }

@@ -365,7 +365,7 @@ Multi-line expression and expected:
     ...     )):
     ...         if i > 0:
     ...             print("---")
-    ...         print(f"line {test.source.line} in {test.source.filename}")
+    ...         print(f"line {test.line} in {test.filename}")
     ...         print(f"expr: {test.expr!r}")
     ...         print(f"expected: {test.expected!r}")
 
@@ -597,7 +597,7 @@ To match the previous example, the leading and trailing line-endings
 need to be stripped.
 
     >>> match("a b", "\na b\n".strip())
-    {
+    {}
 
 ### Runner state
 

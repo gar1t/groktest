@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import *
 
+import configparser
 import importlib
 import json
-import configparser
 import logging
 import re
 
@@ -56,6 +56,7 @@ class Config:
         ps1: str,
         ps2: str,
         test_pattern: str,
+        blank_line: str,
         match_types: MatchTypes,
     ):
         self.name = name
@@ -69,6 +70,7 @@ class Config:
             ),
             re.MULTILINE | re.VERBOSE,
         )
+        self.blank_line = blank_line
         self.match_types = match_types
 
     def __str__(self):
@@ -156,6 +158,7 @@ PYTHON_CONFIG = DEFAULT_CONFIG = Config(
     ps1=">>>",
     ps2="...",
     test_pattern=DEFAULT_TEST_PATTERN,
+    blank_line=".",
     match_types={},
 )
 
@@ -421,7 +424,8 @@ def test_file(filename: str):
 
 
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
-    expected = re.sub(r"^<BLANKLINE>[ \t]*$", "", test.expected, 0, re.MULTILINE)
+    blankline_pattern = rf"^{re.escape(state.config.blank_line)}[ \t]*$"
+    expected = re.sub(blankline_pattern, "", test.expected, 0, re.MULTILINE)
     match = match_test_output(expected, result.output, state.config.match_types)
     if match:
         _handle_test_passed(test, match, state)
@@ -438,18 +442,25 @@ def match_test_output(
     m = parselib.parse(
         expected,
         test_output,
-        _parselib_match_types(match_types or {}),
+        {
+            **_parselib_user_match_types(match_types or {}),
+            **_parselib_builtin_match_types(),
+        },
         evaluate_result=True,
         case_sensitive=case_sensitive,
     )
     return TestMatch(cast(parselib.Result, m).named) if m else None
 
 
-def _parselib_match_types(match_types: MatchTypes):
+def _parselib_user_match_types(match_types: MatchTypes):
     return {
         type_name: _parselib_regex_converter(pattern)
         for type_name, pattern in match_types.items()
     }
+
+
+def _parselib_builtin_match_types():
+    return {"dot": _parselib_regex_converter(r"\.")}
 
 
 def _parselib_regex_converter(pattern: str):
@@ -466,36 +477,27 @@ def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
 
 
 def _handle_test_failed(test: Test, result: TestResult, state: RunnerState):
-    _print_failed_test(test, result)
+    _print_failed_test_sep()
+    _print_failed_test(test, result, state.config)
     state.results["failed"] += 1
     state.results["tested"] += 1
 
 
-def _print_failed_test(test: Test, result: TestResult):
-    """
-**********************************************************************
-File "/home/garrett/Code/groktest/docs/implementation.md", line 599, in implementation.md
-Failed example:
-    match("a b", "\na b\n".strip())
-Expected:
-    {
-Got:
-    {}
-**********************************************************************
-1 items had failures:
-   1 of  74 in implementation.md
-***Test Failed*** 1 failures.
-    """
-
+def _print_failed_test_sep():
     print("**********************************************************************")
+
+
+def _print_failed_test(test: Test, result: TestResult, config: Config):
     print(f"File \"{test.filename}\", line {test.line}")
     print("Failed example:")
     _print_test_expr(test.expr)
-    print("Expected:")
-    _print_test_expected(test.expected)
+    if test.expected:
+        print("Expected:")
+        _print_test_expected(test.expected, config)
+    else:
+        print("Expected nothing")
     print("Got:")
-    _print_test_result_output(result.output)
-    print("**********************************************************************")
+    _print_test_result_output(result.output, config)
 
 
 def _print_test_expr(s: str):
@@ -503,15 +505,17 @@ def _print_test_expr(s: str):
         print("    " + line)
 
 
-def _print_test_expected(s: str):
+def _print_test_expected(s: str, config: Config):
     for line in s.split("\n"):
-        print("    " + line)
+        blankline_qualifier = f" (blank line)" if line == config.blank_line else ""
+        print(f"    {line}{blankline_qualifier}")
 
 
-def _print_test_result_output(s: str):
-    s = re.sub(r"^[ \t]*$", "<BLANKLINE>", s, 0, re.MULTILINE)
+def _print_test_result_output(s: str, config: Config):
+    s = re.sub(r"^[ \t]*$", config.blank_line, s, 0, re.MULTILINE)
     for line in s.split("\n"):
-        print("    " + line)
+        literal_qualifier = f" (literal)" if line == config.blank_line else ""
+        print(f"    {line}{literal_qualifier}")
 
 
 def _maybe_doctest_bootstrap(filename: str):

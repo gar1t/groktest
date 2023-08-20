@@ -154,7 +154,11 @@ def _handle_test(test: TestExpr):
             error = sys.exc_info()
         else:
             error = None
-    _writeline(_encode_test_result(out.getvalue(), error))
+    _writeline(_encode_test_result(_strip_trailing_newline(out.getvalue()), error))
+
+
+def _strip_trailing_newline(s: str):
+    return s[:-1] if  s[-1:] == "\n" else s
 
 
 class _StdOutCapture(io.StringIO):

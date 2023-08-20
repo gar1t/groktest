@@ -41,6 +41,7 @@ def _last_run():
 
 
 def _save_last_run(filenames: List[str]):
+    filenames = [os.path.abspath(path) for path in filenames]
     with open(_last_run_savefile(), "w") as f:
         json.dump(filenames, f)
 
