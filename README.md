@@ -129,7 +129,7 @@ Custom format types may be defined in test font matter.
 
     ---
     test-config:
-      parse-types:
+      match-types:
         id: [a-f0-9]{8}
     ---
 

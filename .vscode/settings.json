@@ -7,7 +7,7 @@
   ],
   "python.analysis.diagnosticSeverityOverrides": {
     "reportUntypedFunctionDecorator": "none",
-    "reportUnusedImport": "warning",
+    "reportUnusedImport": "information",
     "reportGeneralTypeIssues": "warning",
     "reportUnknownParameterType": "warning",
     "reportMissingParameterType": "warning",

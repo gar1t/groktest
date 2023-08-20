@@ -10,8 +10,7 @@ import configparser
 import logging
 import re
 
-from ._vendor_parse import parse
-from ._vendor_parse import Result as ParseResult
+from . import _vendor_parse as parselib
 
 __all__ = [
     "Config",
@@ -19,6 +18,7 @@ __all__ = [
     "init_runner_state",
     "init_runtime",
     "match_test_output",
+    "MatchTypes",
     "parse_tests",
     "PYTHON_CONFIG",
     "RunnerState",
@@ -26,6 +26,7 @@ __all__ = [
     "RUNTIME",
     "test_file",
     "Test",
+    "TestMatch",
     "TestResult",
     "TestSource",
 ]
@@ -45,8 +46,19 @@ class RuntimeNotSupported(Error):
     pass
 
 
+MatchTypes = Dict[str, str]
+
+
 class Config:
-    def __init__(self, name: str, runtime: str, ps1: str, ps2: str, test_pattern: str):
+    def __init__(
+        self,
+        name: str,
+        runtime: str,
+        ps1: str,
+        ps2: str,
+        test_pattern: str,
+        match_types: MatchTypes,
+    ):
         self.name = name
         self.runtime = runtime
         self.ps1 = ps1
@@ -58,6 +70,7 @@ class Config:
             ),
             re.MULTILINE | re.VERBOSE,
         )
+        self.match_types = match_types
 
     def __str__(self):
         return f"<groktest.Config '{self.name}'>"
@@ -80,6 +93,11 @@ class TestResult:
     def __init__(self, code: int, output: str):
         self.code = code
         self.output = output
+
+
+class TestMatch:
+    def __init__(self, bound_variables: Dict[str, Any]):
+        self.bound_variables = bound_variables
 
 
 class Runtime:
@@ -119,28 +137,32 @@ class RunnerState:
         self.results: Dict[str, Any] = {"failed": 0, "tested": 0}
 
 
+DEFAULT_TEST_PATTERN = r"""
+    # Credit: Tim Peters, et al. Python doctest.py
+    # Test expression: PS1 line followed by zero or more PS2 lines
+    (?P<expr>
+        (?:^(?P<indent> [ ]*) {ps1} .*)   # PS1 line
+        (?:\n           [ ]*  {ps2} .*)*  # PS2 lines
+    )
+    \n?
+    # Expected result: any non-blank lines that don't start with PS1
+    (?P<expected>
+        (?:
+        (?![ ]*$)      # Not a blank line
+        (?![ ]*{ps1})  # Not a line starting with PS1
+        .+$\n?         # But any other line
+        )*
+    )
+"""
+
+
 PYTHON_CONFIG = DEFAULT_CONFIG = Config(
     name="python",
     runtime="python",
     ps1=">>>",
     ps2="...",
-    test_pattern=r"""
-        # Credit: Tim Peters, et al. doctest.py
-        # Test expression: PS1 line followed by zero or more PS2 lines
-        (?P<expr>
-          (?:^(?P<indent> [ ]*) {ps1} .*)   # PS1 line
-          (?:\n           [ ]*  {ps2} .*)*  # PS2 lines
-        )
-        \n?
-        # Expected result: any non-blank lines that don't start with PS1
-        (?P<expected>
-          (?:
-            (?![ ]*$)      # Not a blank line
-            (?![ ]*{ps1})  # Not a line starting with PS1
-            .+$\n?         # But any other line
-          )*
-        )
-    """,
+    test_pattern=DEFAULT_TEST_PATTERN,
+    match_types={},
 )
 
 CONFIG: Dict[str, Config] = {"python": PYTHON_CONFIG}
@@ -405,24 +427,46 @@ def test_file(filename: str):
 
 
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
-    # TODO: compare result.output to test.expected to determine if the
-    # test passed or failed and to collect any bound variables
-    match = match_test_output(result.output, test.expected, state.config)
+    match = match_test_output(test.expected, result.output, state.config.match_types)
     if match:
-        _handle_test_passed(test, match.named, state)
+        _handle_test_passed(test, match, state)
     else:
         _handle_test_failed(test, result, state)
 
 
-def match_test_output(output: str, expected: str, config: Config):
-    # TODO use config to create extra types
-    return cast(Optional[ParseResult], parse(expected, output))
-
-
-def _handle_test_passed(
-    test: Test, bound_variables: Dict[str, Any], state: RunnerState
+def match_test_output(
+    expected: str,
+    test_output: str,
+    match_types: Optional[MatchTypes] = None,
+    case_sensitive: bool = False,
 ):
-    state.runtime.handle_bound_variables(bound_variables)
+    m = parselib.parse(
+        expected,
+        test_output,
+        _parselib_match_types(match_types or {}),
+        evaluate_result=True,
+        case_sensitive=case_sensitive,
+    )
+    return TestMatch(cast(parselib.Result, m).named) if m else None
+
+
+def _parselib_match_types(match_types: MatchTypes):
+    return {
+        type_name: _parselib_regex_converter(pattern)
+        for type_name, pattern in match_types.items()
+    }
+
+
+def _parselib_regex_converter(pattern: str):
+    def f(s: str):
+        return s
+
+    f.pattern = pattern
+    return f
+
+
+def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
+    state.runtime.handle_bound_variables(match.bound_variables)
     state.results["tested"] += state.results["tested"]
 
 

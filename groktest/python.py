@@ -35,6 +35,15 @@ class PythonRuntime(Runtime):
     _p: Optional[subprocess.Popen[str]] = None
 
     def init(self, config: Config):
+        # TODO: config should have some sort of runtime init spec - e.g.
+        # a dict of str -> str with keys as global names and vals as
+        # import specs - suggested user config `{"runtime": {"name":
+        # "...", "env": {...}}}` as an extention of the config
+        # `{"runtime": "..."}` - this will work with Python and shell
+        # and provides a generalized input to runtime init (this might
+        # not be ideal UX as runtime is implied by type and associated
+        # config - how then the specify extra globals without much
+        # ceremony?)
         self.config = config
         self._p = _open_proc()
 
