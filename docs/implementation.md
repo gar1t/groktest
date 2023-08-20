@@ -597,7 +597,7 @@ To match the previous example, the leading and trailing line-endings
 need to be stripped.
 
     >>> match("a b", "\na b\n".strip())
-    {}
+    {
 
 ### Runner state
 

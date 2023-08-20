@@ -28,7 +28,6 @@ __all__ = [
     "Test",
     "TestMatch",
     "TestResult",
-    "TestSource",
 ]
 
 log = logging.getLogger("groktest")
@@ -76,17 +75,12 @@ class Config:
         return f"<groktest.Config '{self.name}'>"
 
 
-class TestSource:
-    def __init__(self, filename: str, line: int):
-        self.filename = filename
-        self.line = line
-
-
 class Test:
-    def __init__(self, expr: str, expected: str, source: TestSource):
+    def __init__(self, expr: str, expected: str, filename: str, line: int):
         self.expr = expr
         self.expected = expected
-        self.source = source
+        self.filename = filename
+        self.line = line
 
 
 class TestResult:
@@ -333,7 +327,7 @@ def parse_tests(content: str, config: Config, filename: str):
 def _test_for_match(m: Match[str], config: Config, linepos: int, filename: str):
     expr = _format_expr(m, config, linepos, filename)
     expected = _format_expected(m, linepos, filename)
-    return Test(expr, expected, TestSource(filename, linepos + 1))
+    return Test(expr, expected, filename, linepos + 1)
 
 
 def _format_expr(m: Match[str], config: Config, linepos: int, filename: str):
@@ -427,7 +421,8 @@ def test_file(filename: str):
 
 
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
-    match = match_test_output(test.expected, result.output, state.config.match_types)
+    expected = re.sub(r"^<BLANKLINE>[ \t]*$", "", test.expected, 0, re.MULTILINE)
+    match = match_test_output(expected, result.output, state.config.match_types)
     if match:
         _handle_test_passed(test, match, state)
     else:
@@ -467,15 +462,56 @@ def _parselib_regex_converter(pattern: str):
 
 def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
     state.runtime.handle_bound_variables(match.bound_variables)
-    state.results["tested"] += state.results["tested"]
+    state.results["tested"] += 1
 
 
 def _handle_test_failed(test: Test, result: TestResult, state: RunnerState):
-    print("Some test failed")
-    print(f"Expected: {test.expected}")
-    print(f"Got: {result.output}")
-    state.results["failed"] += state.results["failed"]
-    state.results["tested"] += state.results["tested"]
+    _print_failed_test(test, result)
+    state.results["failed"] += 1
+    state.results["tested"] += 1
+
+
+def _print_failed_test(test: Test, result: TestResult):
+    """
+**********************************************************************
+File "/home/garrett/Code/groktest/docs/implementation.md", line 599, in implementation.md
+Failed example:
+    match("a b", "\na b\n".strip())
+Expected:
+    {
+Got:
+    {}
+**********************************************************************
+1 items had failures:
+   1 of  74 in implementation.md
+***Test Failed*** 1 failures.
+    """
+
+    print("**********************************************************************")
+    print(f"File \"{test.filename}\", line {test.line}")
+    print("Failed example:")
+    _print_test_expr(test.expr)
+    print("Expected:")
+    _print_test_expected(test.expected)
+    print("Got:")
+    _print_test_result_output(result.output)
+    print("**********************************************************************")
+
+
+def _print_test_expr(s: str):
+    for line in s.split("\n"):
+        print("    " + line)
+
+
+def _print_test_expected(s: str):
+    for line in s.split("\n"):
+        print("    " + line)
+
+
+def _print_test_result_output(s: str):
+    s = re.sub(r"^[ \t]*$", "<BLANKLINE>", s, 0, re.MULTILINE)
+    for line in s.split("\n"):
+        print("    " + line)
 
 
 def _maybe_doctest_bootstrap(filename: str):

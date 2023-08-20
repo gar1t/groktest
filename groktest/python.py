@@ -53,7 +53,8 @@ class PythonRuntime(Runtime):
         return _read_test_result(stdout)
 
     def handle_bound_variables(self, bound_variables: Dict[str, Any]):
-        print(f"TODO: do something with bound variables {bound_variables}")
+        # Update proc with bound_variables - e.g. {"type": "vars": "vars", bound_variables}
+        pass
 
     def shutdown(self, timeout: int = 5):
         if self._p:
@@ -98,7 +99,7 @@ def _write_test_req(test: Test, out: IO[str]):
         {
             "type": "test",
             "expr": test.expr,
-            "filename": test.source.filename,
+            "filename": test.filename,
             "flags": 0,  # TODO support for custom Python compile flags
         }
     )
