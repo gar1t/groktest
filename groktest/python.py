@@ -91,8 +91,9 @@ def _close_proc(p: Popen[str], timeout: int):
     assert p.stdin
     p.stdin.write("\n")
     p.stdin.flush()
-    p.wait(timeout)
-    if p.poll() is None:
+    try:
+        p.wait(timeout)
+    except subprocess.TimeoutExpired:
         p.send_signal(signal.SIGKILL)
 
 

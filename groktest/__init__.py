@@ -314,7 +314,7 @@ def _config_for_test_type(fm: Dict[str, Any], filename: str):
     try:
         return CONFIG[test_type]
     except KeyError:
-        raise TestTypeNotSupported(test_type)
+        raise TestTypeNotSupported(test_type) from None
 
 
 def _explicit_config(fm: Any, filename: str):
@@ -538,7 +538,6 @@ def _print_test_expected(s: str, config: Config):
 
 
 def _print_test_result_output(output: str, config: Config):
-    breakpoint()
     output = _insert_blankline_markers(output, config.blankline)
     for line in output.split("\n"):
         print("    " + line)
