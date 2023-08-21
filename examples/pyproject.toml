@@ -1,0 +1,14 @@
+# Futuristc thinkings on possible project config
+
+[tool.groktest.mytests]
+
+globals = "myapp.test.*"
+
+[tool.groktest.myshell]
+
+extends = "shell"
+
+[tool.groktest.myshell.env]
+
+PYTHONPATH = "/something/cool"
+DEBUG = 1

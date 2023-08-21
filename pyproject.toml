@@ -18,8 +18,23 @@ classifiers = [
 
 groktest = "groktest.__main__:main"
 
-
 [project.urls]
 
 "Homepage" = "https://github.com/gar1t/groktest"
 "Bug Tracker" = "https://github.com/gar1t/groktest/issues"
+
+[tool.black]
+
+skip-string-normalization = true
+extend-exclude = "/groktest/_vendor_"
+
+[tool.groktest]
+
+include = [
+  "README.md",
+  "docs/*.md"
+]
+
+exclude = [
+  "docs/yaml-support.md"
+]

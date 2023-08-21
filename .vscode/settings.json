@@ -3,7 +3,8 @@
     "editor.defaultFormatter": "ms-python.black-formatter"
   },
   "python.analysis.ignore": [
-    "groktest/_vendor_parse.py"
+    "groktest/_vendor_parse.py",
+    "groktest/_vendor_tomli"
   ],
   "python.analysis.diagnosticSeverityOverrides": {
     "reportUntypedFunctionDecorator": "none",

@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "problemMatcher": {
     "owner": "groktest",
-    "fileLocation": "absolute",
+    "fileLocation": "relative",
     "pattern": [
       {
         "regexp": "^File \"(.*)\", line (\\d+)",
@@ -29,34 +29,25 @@
       "label": "Groktest: Run Current",
       "type": "process",
       "command": "${command:python.interpreterPath}",
-      "args": ["-m", "groktest", "${file}"]
+      "args": ["-m", "groktest", "${relativeFile}"]
     },
     {
       "label": "Groktest: Run Selected",
       "type": "process",
       "command": "${command:python.interpreterPath}",
       "args": ["-m", "groktest", "${workspaceFolder}/${input:test}"]
-
     },
     {
       "label": "Groktest: Run Last",
       "type": "process",
       "command": "${command:python.interpreterPath}",
       "args": ["-m", "groktest", "--last"]
-
     },
     {
-      "label": "Groktest: Run All",
+      "label": "Groktest: Run Project Tests",
       "type": "process",
       "command": "${command:python.interpreterPath}",
-      "args": [
-        "-m",
-        "groktest",
-        "${workspaceFolder}/README.md",
-        "${workspaceFolder}/docs/api.md",
-        "${workspaceFolder}/docs/implementation.md",
-        "${workspaceFolder}/docs/python.md"
-      ]
+      "args": ["-m", "groktest", "${workspaceFolder}"]
     }
   ],
 

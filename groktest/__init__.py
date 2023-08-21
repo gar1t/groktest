@@ -410,8 +410,7 @@ def init_runtime(config: Config):
 
 
 def test_file(filename: str):
-    # Until Groktest supports doctest format, punt to real doctest
-    result = _maybe_doctest_bootstrap(filename)
+    result = _maybe_bootstrap(filename)
     if result is not None:
         return result
 
@@ -516,7 +515,7 @@ def _print_test_result_output(s: str, config: Config):
         print("    " + line)
 
 
-def _maybe_doctest_bootstrap(filename: str):
+def _maybe_bootstrap(filename: str):
     contents = _read_file(filename)
     fm = _parse_front_matter(contents, filename)
     if fm.get("test-type") == "doctest":

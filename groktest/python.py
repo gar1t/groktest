@@ -158,7 +158,7 @@ def _handle_test(test: TestExpr):
 
 
 def _strip_trailing_newline(s: str):
-    return s[:-1] if  s[-1:] == "\n" else s
+    return s[:-1] if s[-1:] == "\n" else s
 
 
 class _StdOutCapture(io.StringIO):
