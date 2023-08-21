@@ -56,7 +56,7 @@ class Config:
         ps1: str,
         ps2: str,
         test_pattern: str,
-        blank_line: str,
+        blankline: str,
         match_types: MatchTypes,
     ):
         self.name = name
@@ -70,7 +70,7 @@ class Config:
             ),
             re.MULTILINE | re.VERBOSE,
         )
-        self.blank_line = blank_line
+        self.blankline = blankline
         self.match_types = match_types
 
     def __str__(self):
@@ -97,7 +97,7 @@ class TestMatch:
 
 
 class Runtime:
-    def run_test(self, test: Test) -> TestResult:
+    def exec_test_expr(self, test: Test) -> TestResult:
         raise NotImplementedError()
 
     def handle_bound_variables(self, bound_variables: Dict[str, Any]) -> None:
@@ -158,7 +158,7 @@ PYTHON_CONFIG = DEFAULT_CONFIG = Config(
     ps1=">>>",
     ps2="...",
     test_pattern=DEFAULT_TEST_PATTERN,
-    blank_line="|",
+    blankline="|",
     match_types={},
 )
 
@@ -201,8 +201,8 @@ def _parse_front_matter(s: str, filename: str) -> Any:
     return (
         _try_parse_full_yaml(fm, filename)
         or _try_parse_json(fm, filename)
-        or _try_parse_ini(fm, filename)
-        or _try_parse_simple_yaml(fm, filename)
+        or _try_parse_toml(fm, filename)
+        or _try_parse_simplified_yaml(fm, filename)
         or {}
     )
 
@@ -234,7 +234,21 @@ def _try_parse_json(s: str, filename: str, raise_error: bool = False):
         return None
 
 
-def _try_parse_ini(
+def _try_parse_toml(
+    s: str, filename: str, raise_error: bool = False
+) -> Optional[Dict[str, Any]]:
+    from . import _vendor_tomli as toml
+
+    try:
+        return toml.loads(s)
+    except toml.TOMLDecodeError as e:
+        if raise_error:
+            raise
+        log.debug("ERROR parsing TOML for %s: %s", filename, e)
+        return None
+
+
+def _try_parse_simplified_yaml(
     s: str, filename: str, raise_error: bool = False
 ) -> Optional[Dict[str, Any]]:
     parser = configparser.ConfigParser()
@@ -247,15 +261,15 @@ def _try_parse_ini(
         return None
     else:
         parsed = {
-            section: dict({key: _ini_val(val) for key, val in parser[section].items()})
+            section: dict(
+                {key: _simplified_yaml_val(val) for key, val in parser[section].items()}
+            )
             for section in parser
         }
-        anon = parsed.pop("__anonymous__", {})
-        defaults = parsed.pop("DEFAULT", None)
-        return {**anon, **parsed, **({"DEFAULT": defaults} if defaults else {})}
+        return parsed.get("__anonymous__", {})
 
 
-def _ini_val(s: str):
+def _simplified_yaml_val(s: str):
     if s[:1] + s[-1:] in ("\"\"", "''"):
         return s[1:-1]
     s_lower = s.lower()
@@ -270,11 +284,6 @@ def _ini_val(s: str):
             return float(s)
         except ValueError:
             return s
-
-
-def _try_parse_simple_yaml(s: str, filename: str, raise_error: bool = False):
-    # INI format resembles YAML when ':' key/val delimiter is used
-    return _try_parse_ini(s, filename, raise_error)
 
 
 def _config_for_front_matter(fm: Any, filename: str):
@@ -417,19 +426,38 @@ def test_file(filename: str):
     state = init_runner_state(filename)
     with RuntimeScope(state.runtime):
         for test in state.tests:
-            result = state.runtime.run_test(test)
+            result = state.runtime.exec_test_expr(test)
             _handle_test_result(result, test, state)
         return state.results
 
 
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
-    blankline_pattern = rf"^{re.escape(state.config.blank_line)}[ \t]*$"
-    expected = re.sub(blankline_pattern, "", test.expected, 0, re.MULTILINE)
-    match = match_test_output(expected, result.output, state.config.match_types)
+    expected = _test_expected(test, state.config)
+    test_output = _test_result_output(result, state.config)
+    match = match_test_output(expected, test_output, state.config.match_types)
     if match:
         _handle_test_passed(test, match, state)
     else:
         _handle_test_failed(test, result, state)
+
+
+def _test_expected(test: Test, config: Config):
+    return _remove_blankline_markers(test.expected, config.blankline)
+
+
+def _remove_blankline_markers(s: str, marker: str):
+    p = rf"(?m)^{re.escape(marker)}\s*?$"
+    return re.sub(p, "", s)
+
+
+def _test_result_output(result: TestResult, config: Config):
+    # TODO: If there are any transforms to test output that are option
+    # driven, etc
+    return _truncate_empty_line_spaces(result.output)
+
+
+def _truncate_empty_line_spaces(s: str):
+    return re.sub(r"(?m)^[^\S\n]+$", "", s)
 
 
 def match_test_output(
@@ -509,10 +537,18 @@ def _print_test_expected(s: str, config: Config):
         print("    " + line)
 
 
-def _print_test_result_output(s: str, config: Config):
-    s = re.sub(r"^[ \t]*$", config.blank_line, s, 0, re.MULTILINE)
-    for line in s.split("\n"):
+def _print_test_result_output(output: str, config: Config):
+    breakpoint()
+    output = _insert_blankline_markers(output, config.blankline)
+    for line in output.split("\n"):
         print("    " + line)
+
+
+def _insert_blankline_markers(s: str, marker: str):
+    # "(?m)^{re.escape(marker)}\s*?$"
+    # TODO: output is already stripped of trailing \n so anything
+    # at the end needs to be marker
+    return re.sub(r"(?m)^[ ]*(?=\n)", marker, s)
 
 
 def _maybe_bootstrap(filename: str):
@@ -532,11 +568,9 @@ def _doctest_file(filename: str):
         kw = dict(width=72, **kw)
         pprint0(s, **kw)
 
-    options = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
     globs = {"pprint": pprint}
     return doctest.testfile(
         filename,
         module_relative=False,
-        optionflags=options,
         extraglobs=globs,
     )

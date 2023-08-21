@@ -44,7 +44,7 @@
       "args": ["-m", "groktest", "--last"]
     },
     {
-      "label": "Groktest: Run Project Tests",
+      "label": "Groktest: Run All Tests",
       "type": "process",
       "command": "${command:python.interpreterPath}",
       "args": ["-m", "groktest", "${workspaceFolder}"]

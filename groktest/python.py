@@ -11,6 +11,7 @@ import json
 import signal
 import subprocess
 import sys
+import traceback
 
 from .__init__ import Config
 from .__init__ import Runtime
@@ -25,9 +26,9 @@ class TestExpr:
         self.flags = flags
 
 
-class RuntimeInit:
-    def __init__(self, expr: str):
-        self.expr = expr
+class StateUpdate:
+    def __init__(self, globals: Dict[str, Any]):
+        self.globals = globals
 
 
 class PythonRuntime(Runtime):
@@ -47,13 +48,14 @@ class PythonRuntime(Runtime):
         self.config = config
         self._p = _open_proc()
 
-    def run_test(self, test: Test):
+    def exec_test_expr(self, test: Test):
         p, stdin, stdout = _check_proc(self._p)
         _write_test_req(test, stdin)
         return _read_test_result(stdout)
 
     def handle_bound_variables(self, bound_variables: Dict[str, Any]):
-        # Update proc with bound_variables - e.g. {"type": "vars": "vars", bound_variables}
+        # Update proc with bound_variables - e.g.
+        # {"type": "vars": "vars", bound_variables}
         pass
 
     def shutdown(self, timeout: int = 5):
@@ -114,15 +116,16 @@ def _read_test_result(input: IO[str]):
 
 
 def _main_loop():
+    globals = {}
     while True:
         line = _readline()
         if not line:
             break
         req = _decode_request(line)
         if isinstance(req, TestExpr):
-            _handle_test(req)
-        elif isinstance(req, RuntimeInit):
-            _handle_runtime_init(req)
+            _handle_test(req, globals)
+        elif isinstance(req, StateUpdate):
+            _handle_state_update(req, globals)
         else:
             assert False, req
 
@@ -133,28 +136,32 @@ def _readline():
 
 def _decode_request(line: str):
     data = json.loads(line)
-    # Proceed without type checking as errors are obvious
     if data["type"] == "test":
         return TestExpr(
             data["expr"],
             data.get("filename", "<unknown>"),
             data.get("flags", 0),
         )
-    elif data["type"] == "init":
-        return RuntimeInit(data["expr"])
+    elif data["type"] == "state":
+        return StateUpdate(data["globals"])
     else:
         assert False, data
 
 
-def _handle_test(test: TestExpr):
+def _handle_test(test: TestExpr, globals: Dict[str, Any]):
     with _StdOutCapture() as out:
         try:
-            _exec_test(test)
+            _exec_test(test, globals)
         except:
             error = sys.exc_info()
         else:
             error = None
-    _writeline(_encode_test_result(_strip_trailing_newline(out.getvalue()), error))
+    _handle_test_result(out.getvalue(), error)
+
+
+def _handle_test_result(output: str, error: Any):
+    output = _strip_trailing_newline(output)
+    _writeline(_encode_test_result(output, error))
 
 
 def _strip_trailing_newline(s: str):
@@ -176,10 +183,7 @@ class _StdOutCapture(io.StringIO):
         self._real_stdout = None
 
 
-def _exec_test(test: TestExpr):
-    # TODO: Globals needs to sync with runtime init + updates to bound
-    # variables
-    globals = {}
+def _exec_test(test: TestExpr, globals: Dict[str, Any]):
     exec(
         compile(
             test.expr,
@@ -193,13 +197,18 @@ def _exec_test(test: TestExpr):
 
 
 def _encode_test_result(output: str, exc_info: Any):
-    # TODO: how to encode current exc traceback?
     return json.dumps(
         {
             "code": 0 if exc_info is None else 1,
-            "output": output,
+            "output": output if exc_info is None else _format_exc_info(exc_info),
         }
     )
+
+
+def _format_exc_info(exc_info: Any):
+    out = io.StringIO()
+    traceback.print_exception(*exc_info, file=out)
+    return out.getvalue().rstrip()
 
 
 def _writeline(line: str):
@@ -208,8 +217,8 @@ def _writeline(line: str):
     sys.stdout.flush()
 
 
-def _handle_runtime_init(init: RuntimeInit):
-    print("TOOD: handle runtime init")
+def _handle_state_update(update: StateUpdate, globals: Dict[str, Any]):
+    globals.update(update.globals)
 
 
 if __name__ == "__main__":

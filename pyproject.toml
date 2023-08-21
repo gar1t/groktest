@@ -36,3 +36,7 @@ include = [
 ]
 
 exclude = "docs/yaml-support.md"
+
+[tool.groktest.doctest]
+
+options = "+IGNORE_EXCEPTION_DETAIL +ELLIPSIS +NORMALIZE_WHITESPACE"

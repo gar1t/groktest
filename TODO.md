@@ -1,10 +1,99 @@
 # Groktest To Do
 
+- Project config for doctest options
+
 ## Error support
 
-  - How do we explicitly handle an 'error' (non-zero code)
-  - Consider Python (doctest as model) and also shell (`<exit N>` as
-    optional last-line on success, required on error)
+- How do we explicitly handle an 'error' (non-zero code)
+- Consider Python (doctest as model) and also shell (`<exit N>` as
+  optional last-line on success, required on error)
+
+`doctest` shows something like this:
+
+```
+Failed example:
+    groktest.DEFAULT_CONFIG.ps1
+Exception raised:
+    Traceback (most recent call last):
+      File "/usr/lib/python3.10/doctest.py", line 1350, in __run
+        exec(compile(example.source, filename, "single",
+      File "<doctest parsing.md[0]>", line 1, in <module>
+        groktest.DEFAULT_CONFIG.ps1
+    NameError: name 'groktest' is not defined
+```
+
+There's an explicit notion of 'error' here. The report does not show
+output printed to standard outout during the evaluation of the
+expression.
+
+When an exception doesn't occur, output looks like this:
+
+```
+Failed example:
+    1
+Expected:
+    2
+Got:
+    1
+```
+
+We *could* implement something like this:
+
+```
+Failed example:
+    groktest.DEFAULT_CONFIG.ps1
+Expected nothing
+Got:
+    Traceback (most recent call last):
+      File "/usr/lib/python3.10/doctest.py", line 1350, in __run
+        exec(compile(example.source, filename, "single",
+      File "<doctest parsing.md[0]>", line 1, in <module>
+        groktest.DEFAULT_CONFIG.ps1
+    NameError: name 'groktest' is not defined
+```
+
+In the case of `shell`, we could face something similar, where non-zero
+exit is an 'error'.
+
+```
+Failed example:
+    echo Boom
+    exit 1
+Exit (1):
+    Boom
+```
+
+If it were an empty result:
+
+```
+Failed example:
+    exit 1
+Exit (1)
+```
+
+If we used the expected/got idiom the report might look like this:
+
+```
+Failed example:
+  echo Boom
+  exit 1
+Expected:
+  Boom
+  <exit 0>
+Got:
+  Boom
+  <exit 1>
+```
+
+I don't really see the point of treating an error differently. The
+`doctest` method loses the 'expected' report and sets the pattern up for
+other runtimes.
+
+I believe this is simply a reporting topic.
+
+Let's proceed with the got/expected pattern for errors, as well as
+success (treating them as no different, except possibly some
+reformatting).
 
 ## Think about the `assert` pattern
 
@@ -19,35 +108,94 @@ This is better:
 
 We just need decent error reporting in this case.
 
+## Test options
+
+- Project level
+- Front-matter
+- Per test
+
+Per test, `doctest` uses the `doctest: [+-]OPTION` pattern. This is more
+verbose than what we'd like.
+
+Proposal is to use this pattern:
+
+    [-+] (?P<name>\w+) |
+    [+]  (?P<name>\w+) = (?P<value>.+)
+
+This supports negation or deletion of options using `-<name>` options
+and enabling or setting options using `+<name>` and `+<name>=<value>`
+respectively.
+
+Examples:
+
+    >>> print("{}")  # -match
+    {}
+
+Needed options:
+
+- `match`
+
+   Output is patterns are matched. Disabled by default.
+
+   Defaults to false to avoid collisions with curly braces, which are
+   common in Python data representation.
+
+   This should pass by default.
+
+   ```
+   >>> {"foo": 123}
+   {"foo": 123}
+   ```
+
+   To pattern match this example, `+match` is used with a modified
+   example.
+
+   ```
+   >>> {"foo": 123}  # +match
+   {{"foo": {:d}}}
+   ```
+
+- `case`
+
+  Output matching is case-sensitive. Enabled by default.
+
+  Disable for case-insensitive matches.
+
+  ```
+  >>> "Hello"  # -case
+  hello
+  ```
+
+- `skip`
+
+  Skips a test. Disabled by default.
+
+  An entire test file can be skipped by enabling this option in
+  front-matter. Individual tests can be unskipped using `-skip` in this
+  case.
+
+- `fails`
+
+  Indicates that the test is expected to fail. Disabled by default.
+
+  It can be useful to include tests that fail as examples. If the test
+  succeeds unexpectedly, the success is recorded as a failure in the
+  outout. Otherwise the test is considered to have passed.
+
+  Similar in application to `+skip` but asserts an expected failure.
+
+- `solo`
+
+  Run only tests enabled for solo, if any are enabled. Defaults to
+  disabled.
+
+  Soloing one or more tests is an easy way to run only certain tests.
+  This is useful when debugging a failing test.
+
 ## Globals config
 
   - Project level
   - Front-matter
-
-## Test options
-
-  - Project level
-  - Front-matter
-  - Per test
-
-Per test, `doctest` uses the `doctest: [+-]OPTION` pattern. We should
-explore some alternatives.
-
-Ideas:
-
-    >>> print("a\nb")  # +diff
-
-    >>> print("a\nb")  # +report=diff
-
-    >>> print("a\nb")  #> {"report": "diff"}
-
-    >>> print("a\nb")  #| report: diff
-
-We should keep things simple. I don't think supporting JSON or YAML like
-this is a good idea. A simple switch syntax should be fine.
-
-    [-+] (?P<name>\w+) |
-    [+]  (?P<name>\w+) = (?P<value>.+)
 
 ## Final tests results should report
 

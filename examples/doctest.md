@@ -19,3 +19,13 @@ Tests don't need to be indented. However, to format examples using fenced blocks
 ```
 
 For this reason Groktest recommends indenting tests in Mardown files.
+
+Errors are tested by providing a `Traceback` example.
+
+    >>> undefined
+    Traceback (most recent call last):
+    NameError: name 'undefined' is not defined
+
+Testing blank lines.
+
+    >>> print("")  # doctest: -NORMALIZE_WHITESPACE

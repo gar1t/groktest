@@ -28,19 +28,18 @@ Full YAML front matter parsing is provided by the Groktest function
 
     >>> import groktest
 
-    >>> def fm(s: str):
+    >>> def parse_yaml(s: str):
     ...     # Raise error for diagnostics
-    ...     return groktest._try_parse_full_yaml(s, "<test>", raise_error=True)
+    ...     pprint(groktest._try_parse_full_yaml(s, "<test>", raise_error=True))
 
 For core front matter parsing tests, see [tests.md](tests.md).
 
 Examples:
 
-    >>> fm("")
+    >>> parse_yaml("")
+    None
 
-    >>> from pprint import pprint
-
-    >>> pprint(fm("""
+    >>> parse_yaml("""
     ... i: 123
     ... f: 123.0
     ... b: yes
@@ -52,10 +51,20 @@ Examples:
     ...  - 2.0
     ...  - abc
     ...  - def: 789
-    ... """))
+    ... """)
     {'b': True,
      'f': 123.0,
      'i': 123,
      'l1': [1, 2.0, 'abc', {'def': 789}],
      'l2': [1, 2.0, 'abc', {'def': 789}],
      'm': {'i': 456}}
+
+    >>> parse_yaml("""
+    ... test-options: +match -case
+    ... """)
+    {'test-options': '+match -case'}
+
+    >>> parse_yaml("""
+    ... test-options: -case
+    ... """)
+    {'test-options': '-case'}
