@@ -35,6 +35,4 @@ include = [
   "docs/*.md"
 ]
 
-exclude = [
-  "docs/yaml-support.md"
-]
+exclude = "docs/yaml-support.md"

@@ -185,19 +185,27 @@ def _config_for_project_data(data: Dict[str, Any]):
 
 def _config_for_groktest_data(data: Dict[str, Any], config_filename: str):
     try:
-        include = data["include"]
+        include = _coerce_list(data["include"])
     except KeyError:
         raise SystemExit(
             f"Missing 'include' in 'tool.groktest' section in {config_filename}"
         )
     else:
-        filenames = _filenames_for_test_patterns(include, data.get("exclude"))
+        filenames = _filenames_for_test_patterns(
+            include, _coerce_list(data.get("exclude"))
+        )
         return CmdConfig(filenames)
 
 
-def _filenames_for_test_patterns(
-    include: List[str], exclude: Optional[List[str]] = None
-):
+def _coerce_list(val: Any) -> List[Any]:
+    if isinstance(val, list):
+        return val
+    if val is None:
+        return []
+    return [val]
+
+
+def _filenames_for_test_patterns(include: List[str], exclude: List[str]):
     excluded = set(_apply_test_patterns(exclude or [], "exclude"))
     included = _apply_test_patterns(include, "include")
     return [path for path in included if path not in excluded]
@@ -215,10 +223,6 @@ def _apply_test_patterns(patterns: List[str], desc: str):
 def _apply_args_to_config(args: Any, config: CmdConfig):
     # TODO: apply applicable args to config as overrides
     pass
-
-
-def _loglevel_for_args(args: Any):
-    return logging.DEBUG if args.debug else logging.WARNING
 
 
 def _save_last_paths(filenames: List[str]):

@@ -5,6 +5,10 @@
   - Consider Python (doctest as model) and also shell (`<exit N>` as
     optional last-line on success, required on error)
 
+- Globals config
+  - Project level
+  - Front-matter
+
 - Cleanup test report scheme
   - Generalize (e.g. reporter/callback facility)
   - Modernize Grokville reports
@@ -18,6 +22,10 @@
   - Tests passed
   - Tests failed
   - Tests skipped
+
+- Parallel run support
+  - Per file is easy - it's isolated per runtime
+  - Use technique used in Guild - simple and it works
 
 - Method to quickly disable tests at a point
   - Some sort of test option
