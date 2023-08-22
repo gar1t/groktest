@@ -37,10 +37,14 @@ Create a helper to execute test expressions.
 
 Various tests:
 
+    >>> run_test(">>> None")
+    <BLANKLINE>
+
     >>> run_test("""
     ... >>> 1 + 1
     ... """)
     2
+    <BLANKLINE>
 
     >>> run_test("""
     ... >>> print('''
@@ -56,11 +60,14 @@ Various tests:
     <BLANKLINE>
     Line 2
     <BLANKLINE>
+    <BLANKLINE>
 
     >>> run_test(">>> 1 / 0")
     Traceback (most recent call last):
-    ...
+      ...
+      File "<test>", line 1, in <module>
     ZeroDivisionError: division by zero
+    <BLANKLINE>
 
 Shut down the runtime.
 

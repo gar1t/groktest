@@ -1,14 +1,6 @@
 ---
-# Unless otherwise specified by `test-type` in this front-matter
-# the test type is 'default'
+# test-type is 'default' by default
 ---
-
-    >>> print("")
-    |
-
-    >>> print("\n")
-    |
-    |
 
 # Default Groktest tests
 
@@ -70,15 +62,24 @@ outout.
 
 Groktest uses the token `|` (pipe character).
 
+    >>> print("")
+    |
+
+    >>> print("\n")
+    |
+    |
+
+    >>> print("""
+    ... foo""")
+    |
+    foo
+
     >>> print("""
     ... foo
     ... """)
     |
     foo
-
-
-Use a single pipe (`|`) in place of expected blank lines. This is
-equivalent to `<BLANKLINE>` in `doctest`.
+    |
 
     >>> print("""
     ... foo

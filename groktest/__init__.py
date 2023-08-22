@@ -78,8 +78,13 @@ class Config:
         return f"<groktest.Config '{self.name}'>"
 
 
+TestOptions = Dict[str, Any]
+
+
 class Test:
-    def __init__(self, expr: str, expected: str, filename: str, line: int):
+    def __init__(
+        self, expr: str, expected: str, filename: str, line: int, options: TestOptions
+    ):
         self.expr = expr
         self.expected = expected
         self.filename = filename
@@ -340,7 +345,7 @@ def parse_tests(content: str, config: Config, filename: str):
 def _test_for_match(m: Match[str], config: Config, linepos: int, filename: str):
     expr = _format_expr(m, config, linepos, filename)
     expected = _format_expected(m, linepos, filename)
-    return Test(expr, expected, filename, linepos + 1)
+    return Test(expr, expected, filename, linepos + 1, {})
 
 
 def _format_expr(m: Match[str], config: Config, linepos: int, filename: str):
@@ -433,25 +438,30 @@ def test_file(filename: str):
 
 
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
-    expected = _test_expected(test, state.config)
-    test_output = _test_result_output(result, state.config)
+    expected = _format_match_expected(test, state.config)
+    test_output = _format_match_test_output(result, state.config)
     match = match_test_output(expected, test_output, state.config.match_types)
+    _log_test_result_match(match, result, test, expected, test_output, state)
     if match:
         _handle_test_passed(test, match, state)
     else:
         _handle_test_failed(test, result, state)
 
 
-def _test_expected(test: Test, config: Config):
-    return _remove_blankline_markers(test.expected, config.blankline)
+def _format_match_expected(test: Test, config: Config):
+    expected = _append_lf_for_non_empty(test.expected)
+    return _remove_blankline_markers(expected, config.blankline)
+
+
+def _append_lf_for_non_empty(s: str):
+    return s + '\n' if s else s
 
 
 def _remove_blankline_markers(s: str, marker: str):
-    p = rf"(?m)^{re.escape(marker)}\s*?$"
-    return re.sub(p, "", s)
+    return re.sub(rf"(?m)^{re.escape(marker)}\s*?$", "", s)
 
 
-def _test_result_output(result: TestResult, config: Config):
+def _format_match_test_output(result: TestResult, config: Config):
     # TODO: If there are any transforms to test output that are option
     # driven, etc
     return _truncate_empty_line_spaces(result.output)
@@ -467,6 +477,11 @@ def match_test_output(
     match_types: Optional[MatchTypes] = None,
     case_sensitive: bool = False,
 ):
+    # TODO - lots of options here!
+    # - is this a pattern match?
+    # - is this an ellipsis match?
+    # - is this some other type of match??
+
     m = parselib.parse(
         expected,
         test_output,
@@ -497,6 +512,24 @@ def _parselib_regex_converter(pattern: str):
 
     f.pattern = pattern
     return f
+
+
+def _log_test_result_match(
+    match: Optional[TestMatch],
+    result: TestResult,
+    test: Test,
+    used_expected: str,
+    used_test_output: str,
+    state: RunnerState,
+):
+    log.debug("Result for %r", test.expr)
+    log.debug("  match: %s", "yes" if match else "no")
+    if match:
+        log.debug("  bound variables: %s", match.bound_variables)
+    log.debug("  test expected: %r", test.expected)
+    log.debug("  test result: (%r) %r", result.code, result.output)
+    log.debug("  used expected: %r", used_expected)
+    log.debug("  used test output: %r", used_test_output)
 
 
 def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
@@ -539,16 +572,22 @@ def _print_test_expected(s: str, config: Config):
 
 
 def _print_test_result_output(output: str, config: Config):
-    output = _insert_blankline_markers(output, config.blankline)
+    output = _format_test_result_output(output, config)
     for line in output.split("\n"):
         print("    " + line)
 
 
+def _format_test_result_output(output: str, config: Config):
+    output = _insert_blankline_markers(output, config.blankline)
+    return _strip_trailing_lf(output)
+
+
 def _insert_blankline_markers(s: str, marker: str):
-    # "(?m)^{re.escape(marker)}\s*?$"
-    # TODO: output is already stripped of trailing \n so anything
-    # at the end needs to be marker
     return re.sub(r"(?m)^[ ]*(?=\n)", marker, s)
+
+
+def _strip_trailing_lf(s: str):
+    return s[:-1] if s[-1:] == "\n" else s
 
 
 def _maybe_doctest(filename: str):

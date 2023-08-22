@@ -161,12 +161,7 @@ def _handle_test(test: TestExpr, globals: Dict[str, Any]):
 
 
 def _handle_test_result(output: str, error: Any):
-    output = _strip_trailing_newline(output)
     _writeline(_encode_test_result(output, error))
-
-
-def _strip_trailing_newline(s: str):
-    return s[:-1] if s[-1:] == "\n" else s
 
 
 class _StdOutCapture(io.StringIO):
@@ -209,7 +204,7 @@ def _encode_test_result(output: str, exc_info: Any):
 def _format_exc_info(exc_info: Any):
     out = io.StringIO()
     traceback.print_exception(*exc_info, file=out)
-    return out.getvalue().rstrip()
+    return out.getvalue()
 
 
 def _writeline(line: str):
