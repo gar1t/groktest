@@ -1,5 +1,6 @@
 ---
 test-type: doctest
+test-options: +ELLIPSIS
 ---
 
 TODO:
@@ -20,7 +21,7 @@ PyYAML must be installed.
 
     >>> import yaml
 
-    >>> yaml.__version__  # doctest: +ELLIPSIS
+    >>> yaml.__version__
     '6...'
 
 Full YAML front matter parsing is provided by the Groktest function

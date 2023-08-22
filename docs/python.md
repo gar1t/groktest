@@ -1,5 +1,6 @@
 ---
 test-type: doctest
+test-options: +ELLIPSIS
 ---
 
 # Python support
@@ -56,7 +57,7 @@ Various tests:
     Line 2
     <BLANKLINE>
 
-    >>> run_test(">>> 1 / 0")  # doctest: +ELLIPSIS
+    >>> run_test(">>> 1 / 0")
     Traceback (most recent call last):
     ...
     ZeroDivisionError: division by zero

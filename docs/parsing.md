@@ -173,7 +173,7 @@ much.
     >>> parse_tests("""
     ...   >>> 1
     ...  1
-    ... """)  # doctest: +IGNORE_EXCEPTION_DETAIL
+    ... """)
     Traceback (most recent call last):
     ValueError: File "<test>", line 2, in test: inconsistent leading whitespace
 
@@ -182,13 +182,13 @@ Prompts must be followed by at least one space char.
     >>> parse_tests("""
     ...   >>>1
     ...   1
-    ... """)  # doctest: +IGNORE_EXCEPTION_DETAIL
+    ... """)
     Traceback (most recent call last):
     ValueError: File "<test>", line 2, in test: space missing after prompt
 
     >>> parse_tests("""
     ...   >>> print(
     ...   ..."hello")
-    ... """)  # doctest: +IGNORE_EXCEPTION_DETAIL
+    ... """)
     Traceback (most recent call last):
     ValueError: File "<test>", line 3, in test: space missing after prompt

@@ -2,7 +2,7 @@
 test-type: doctest
 ---
 
-# Groktest front-matter
+# Groktest front matter
 
 Front matter is denoted by a line `---` at the start of the file
 followed by a subseuqnet line `---`.
@@ -145,10 +145,9 @@ TOML:
 
 ## Simplified YAML
 
-Groktest supports simplified YAML front-matter so as not to rely on
+Groktest supports simplified YAML front matter so as not to rely on
 external libraries such as PyYAML. PyYAML is required for full YAML
-support. See [yaml-support.md](yaml-support.md) for details on parsing
-full YAML.
+support. See [yaml.md](yaml.md) for details on parsing full YAML.
 
 The internal function `_try_parse_simplified_yaml` implements support
 for parsing simpligied YAML.
@@ -230,9 +229,9 @@ also not valid YAML.
 
 ## JSON
 
-JSON may be used in front-matter to define full format configuration.
+JSON may be used in front matter to define full format configuration.
 The internal `_try_parse_json` implements support for parsing JSON
-front-matter.
+front matter.
 
     >>> def parse_json(s):
     ...     pprint(groktest._try_parse_json(s, "<test>", raise_error=True))

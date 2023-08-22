@@ -35,7 +35,7 @@ include = [
   "docs/*.md"
 ]
 
-exclude = "docs/yaml-support.md"
+exclude = "docs/yaml.md"
 
 [tool.groktest.doctest]
 

@@ -28,4 +28,5 @@ Errors are tested by providing a `Traceback` example.
 
 Testing blank lines.
 
-    >>> print("")  # doctest: -NORMALIZE_WHITESPACE
+    >>> print("")
+    <BLANKLINE>

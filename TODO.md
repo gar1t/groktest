@@ -1,7 +1,5 @@
 # Groktest To Do
 
-- Project config for doctest options
-
 ## Error support
 
 - How do we explicitly handle an 'error' (non-zero code)
@@ -111,8 +109,14 @@ We just need decent error reporting in this case.
 ## Test options
 
 - Project level
+  - [ ] general
+  - [ ] doctest
 - Front-matter
+  - [ ] general
+  - [x] doctest
 - Per test
+  - [ ] general
+  - [x] doctest
 
 Per test, `doctest` uses the `doctest: [+-]OPTION` pattern. This is more
 verbose than what we'd like.

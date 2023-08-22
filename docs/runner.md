@@ -1,5 +1,6 @@
 ---
 test-type: doctest
+test-options: +ELLIPSIS
 ---
 
 # Test runners
@@ -19,13 +20,13 @@ Runner state consists of the following:
 - Tests
 - Results
 
-    >>> state.config  # doctest: +ELLIPSIS
+    >>> state.config
     <groktest.Config object at ...>
 
-    >>> state.runtime  # doctest: +ELLIPSIS
+    >>> state.runtime
     <groktest.python.PythonRuntime object at ...>
 
-    >>> state.tests  # doctest: +ELLIPSIS
+    >>> state.tests
     [<groktest.Test object at ...>, ...]
 
     >>> state.results
@@ -45,6 +46,5 @@ Runtime should be shut down when no longer needed.
 A file must exist.
 
     >>> init_runner_state("does_not_exist")
-    ... # doctest.IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
     FileNotFoundError: [Errno 2] No such file or directory: 'does_not_exist'

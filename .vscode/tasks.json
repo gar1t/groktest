@@ -61,7 +61,8 @@
         "docs/api.md",
         "docs/implementation.md",
         "docs/python.md",
-        "docs/yaml-support.md",
+        "docs/runner.md",
+        "docs/yaml.md",
         "examples/doctest.md",
         "examples/defaults.md",
         "examples/unkown-format.md"

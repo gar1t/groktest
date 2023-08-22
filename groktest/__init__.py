@@ -15,6 +15,7 @@ from . import _vendor_parse as parselib
 __all__ = [
     "Config",
     "CONFIG",
+    "DEFAULT_CONFIG",
     "init_runner_state",
     "init_runtime",
     "match_test_output",
@@ -419,7 +420,7 @@ def init_runtime(config: Config):
 
 
 def test_file(filename: str):
-    result = _maybe_bootstrap(filename)
+    result = _maybe_doctest(filename)
     if result is not None:
         return result
 
@@ -550,26 +551,60 @@ def _insert_blankline_markers(s: str, marker: str):
     return re.sub(r"(?m)^[ ]*(?=\n)", marker, s)
 
 
-def _maybe_bootstrap(filename: str):
+def _maybe_doctest(filename: str):
     contents = _read_file(filename)
     fm = _parse_front_matter(contents, filename)
     if fm.get("test-type") == "doctest":
-        failed, tested = _doctest_file(filename)
+        failed, tested = _doctest_file(filename, fm)
         return {"failed": failed, "tested": tested}
     return None
 
 
-def _doctest_file(filename: str):
+def _doctest_file(filename: str, config: Any):
     import doctest
+
+    return doctest.testfile(
+        filename,
+        module_relative=False,
+        optionflags=_doctest_options(config),
+        extraglobs=_doctest_globals(config),
+    )
+
+
+def _doctest_options(config: Any):
+    opts = config.get("test-options")
+    if not opts:
+        return 0
+    if not isinstance(opts, str):
+        raise ValueError("doctest test-options must be a string")
+    flags = 0
+    for opt_flag, enabled in _iter_doctest_opts(opts):
+        if enabled:
+            flags |= opt_flag
+        else:
+            flags &= ~opt_flag
+    return flags
+
+
+def _iter_doctest_opts(opts: str) -> Generator[Tuple[int, bool], None, None]:
+    import doctest
+
+    for opt in re.findall(r"(?i)[+-][a-z0-9_]+", opts):
+        assert opt[0] in ("+", "-"), (opt, opts)
+        enabled, opt = opt[0] == "+", opt[1:]
+        try:
+            yield getattr(doctest, opt.upper()), enabled
+        except AttributeError:
+            pass
+
+
+def _doctest_globals(config: Any):
     from pprint import pprint as pprint0
 
     def pprint(s: str, **kw: Any):
         kw = dict(width=72, **kw)
         pprint0(s, **kw)
 
-    globs = {"pprint": pprint}
-    return doctest.testfile(
-        filename,
-        module_relative=False,
-        extraglobs=globs,
-    )
+    return {
+        "pprint": pprint,
+    }
