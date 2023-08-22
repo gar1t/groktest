@@ -13,7 +13,7 @@ import subprocess
 import sys
 import traceback
 
-from .__init__ import Config
+from .__init__ import TestSpec
 from .__init__ import Runtime
 from .__init__ import Test
 from .__init__ import TestResult
@@ -32,10 +32,10 @@ class StateUpdate:
 
 
 class PythonRuntime(Runtime):
-    config: Optional[Config] = None
+    config: Optional[TestSpec] = None
     _p: Optional[subprocess.Popen[str]] = None
 
-    def init(self, config: Config):
+    def start(self):
         # TODO: config should have some sort of runtime init spec - e.g.
         # a dict of str -> str with keys as global names and vals as
         # import specs - suggested user config `{"runtime": {"name":
@@ -45,7 +45,6 @@ class PythonRuntime(Runtime):
         # not be ideal UX as runtime is implied by type and associated
         # config - how then the specify extra globals without much
         # ceremony?)
-        self.config = config
         self._p = _open_proc()
 
     def exec_test_expr(self, test: Test):
@@ -58,7 +57,7 @@ class PythonRuntime(Runtime):
         # {"type": "vars": "vars", bound_variables}
         pass
 
-    def shutdown(self, timeout: int = 5):
+    def stop(self, timeout: int = 5):
         if self._p:
             _close_proc(self._p, timeout)
             self._p = None
@@ -67,7 +66,7 @@ class PythonRuntime(Runtime):
         return self._p is not None
 
     def __del__(self):
-        self.shutdown(0)
+        self.stop(0)
 
 
 def _check_proc(p: Optional[Popen[str]]):

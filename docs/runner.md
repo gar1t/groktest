@@ -15,13 +15,13 @@ Runner state an internal construct Groktest uses when running tests.
 
 Runner state consists of the following:
 
-- Test configuration
+- Test spec
 - Runtime
 - Tests
 - Results
 
-    >>> state.config
-    <groktest.Config object at ...>
+    >>> state.spec
+    <groktest.TestSpec object at ...>
 
     >>> state.runtime
     <groktest.python.PythonRuntime object at ...>
@@ -37,9 +37,9 @@ The runtime available from the state is available.
     >>> state.runtime.is_available()
     True
 
-Runtime should be shut down when no longer needed.
+Runtime should be stopped when no longer needed.
 
-    >>> state.runtime.shutdown()
+    >>> state.runtime.stop()
 
 ## Errors
 

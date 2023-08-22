@@ -13,15 +13,15 @@ import re
 from . import _vendor_parse as parselib
 
 __all__ = [
-    "Config",
-    "CONFIG",
-    "DEFAULT_CONFIG",
+    "TestSpec",
+    "TEST_SPECS",
+    "DEFAULT_SPEC",
     "init_runner_state",
     "init_runtime",
     "match_test_output",
     "MatchTypes",
     "parse_tests",
-    "PYTHON_CONFIG",
+    "PYTHON_SPEC",
     "RunnerState",
     "Runtime",
     "RUNTIME",
@@ -49,18 +49,15 @@ class RuntimeNotSupported(Error):
 MatchTypes = Dict[str, str]
 
 
-class Config:
+class TestSpec:
     def __init__(
         self,
-        name: str,
         runtime: str,
         ps1: str,
         ps2: str,
         test_pattern: str,
         blankline: str,
-        match_types: MatchTypes,
     ):
-        self.name = name
         self.runtime = runtime
         self.ps1 = ps1
         self.ps2 = ps2
@@ -72,11 +69,6 @@ class Config:
             re.MULTILINE | re.VERBOSE,
         )
         self.blankline = blankline
-        self.match_types = match_types
-
-    def __str__(self):
-        return f"<groktest.Config '{self.name}'>"
-
 
 TestOptions = Dict[str, Any]
 
@@ -103,13 +95,16 @@ class TestMatch:
 
 
 class Runtime:
+    def start(self) -> None:
+        raise NotImplementedError()
+
     def exec_test_expr(self, test: Test) -> TestResult:
         raise NotImplementedError()
 
     def handle_bound_variables(self, bound_variables: Dict[str, Any]) -> None:
         raise NotImplementedError()
 
-    def shutdown(self, timeout: int = 0) -> None:
+    def stop(self, timeout: int = 0) -> None:
         raise NotImplementedError()
 
     def is_available(self) -> bool:
@@ -117,23 +112,23 @@ class Runtime:
 
 
 class RuntimeScope:
-    def __init__(self, runtime: Runtime, shutdown_timeout: Optional[int] = None):
+    def __init__(self, runtime: Runtime, stop_timeout: Optional[int] = None):
         self.runtime = runtime
-        self.shutdown_timeout = shutdown_timeout
+        self.stop_timeout = stop_timeout
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc: Any):
-        if self.shutdown_timeout is not None:
-            self.runtime.shutdown(self.shutdown_timeout)
+        if self.stop_timeout is not None:
+            self.runtime.stop(self.stop_timeout)
         else:
-            self.runtime.shutdown()
+            self.runtime.stop()
 
 
 class RunnerState:
-    def __init__(self, config: Config, runtime: Runtime, tests: List[Test]):
-        self.config = config
+    def __init__(self, spec: TestSpec, runtime: Runtime, tests: List[Test]):
+        self.spec = spec
         self.runtime = runtime
         self.tests = tests
         self.results: Dict[str, Any] = {"failed": 0, "tested": 0}
@@ -158,17 +153,15 @@ DEFAULT_TEST_PATTERN = r"""
 """
 
 
-PYTHON_CONFIG = DEFAULT_CONFIG = Config(
-    name="python",
+PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     runtime="python",
     ps1=">>>",
     ps2="...",
     test_pattern=DEFAULT_TEST_PATTERN,
     blankline="|",
-    match_types={},
 )
 
-CONFIG: Dict[str, Config] = {"python": PYTHON_CONFIG}
+TEST_SPECS: Dict[str, TestSpec] = {"python": PYTHON_SPEC}
 
 RUNTIME = {"python": "groktest.python.PythonRuntime"}
 
@@ -176,10 +169,10 @@ RUNTIME = {"python": "groktest.python.PythonRuntime"}
 def init_runner_state(filename: str):
     contents = _read_file(filename)
     fm = _parse_front_matter(contents, filename)
-    config = _config_for_front_matter(fm, filename)
-    runtime = init_runtime(config)
-    tests = parse_tests(contents, config, filename)
-    return RunnerState(config, runtime, tests)
+    spec = _spec_for_front_matter(fm, filename)
+    runtime = init_runtime(spec.runtime)
+    tests = parse_tests(contents, spec, filename)
+    return RunnerState(spec, runtime, tests)
 
 
 def _read_file(filename: str):
@@ -292,75 +285,92 @@ def _simplified_yaml_val(s: str):
             return s
 
 
-def _config_for_front_matter(fm: Any, filename: str):
+def _spec_for_front_matter(fm: Any, filename: str):
     return (
-        _default_config_for_missing_or_invalid_front_matter(fm, filename)
-        or _config_for_test_type(fm, filename)
-        or _explicit_config(fm, filename)
-        or DEFAULT_CONFIG
+        _default_spec_for_missing_or_invalid_front_matter(fm, filename)
+        or _spec_for_test_type(fm, filename)
+        or _explicit_spec(fm, filename)
+        or DEFAULT_SPEC
     )
 
 
-def _default_config_for_missing_or_invalid_front_matter(fm: Any, filename: str):
+def _default_spec_for_missing_or_invalid_front_matter(fm: Any, filename: str):
     if not fm:
-        return DEFAULT_CONFIG
+        return DEFAULT_SPEC
     if not isinstance(fm, dict):
         log.warning(
             "Unexpected front matter type %s in %s, expected map", type(fm), filename
         )
-        return DEFAULT_CONFIG
+        return DEFAULT_SPEC
     return None
 
 
-def _config_for_test_type(fm: Dict[str, Any], filename: str):
+def _spec_for_test_type(fm: Dict[str, Any], filename: str):
     assert isinstance(fm, dict)
     test_type = fm.get("test-type")
     if not test_type:
         return None
     try:
-        return CONFIG[test_type]
+        return TEST_SPECS[test_type]
     except KeyError:
         raise TestTypeNotSupported(test_type) from None
 
 
-def _explicit_config(fm: Any, filename: str):
+def _explicit_spec(fm: Any, filename: str):
     assert isinstance(fm, dict)
-    config = fm.get("test-config")
-    if not config:
+    spec = fm.get("test-spec")
+    if not spec:
         return None
-    assert False, ("TODO", config)
+    if not isinstance(fm, dict):
+        log.warning("Invalid 'test-spec' in %s: expected map", filename)
+        return None
+    try:
+        return TestSpec(
+            runtime=fm["runtime"],
+            ps1=fm["ps1"],
+            ps2=fm["ps2"],
+            test_pattern=fm["test-pattern"],
+            blankline=fm["blankline"],
+        )
+    except KeyError as e:
+        log.warning(
+            "Missing required attribute '%s', for 'test-spec' in %s",
+            e.args[0],
+            filename,
+        )
+        return None
 
 
-def parse_tests(content: str, config: Config, filename: str):
+def parse_tests(content: str, spec: TestSpec, filename: str):
     tests = []
     charpos = linepos = 0
-    for m in config.test_pattern.finditer(content):
+    for m in spec.test_pattern.finditer(content):
         linepos += content.count("\n", charpos, m.start())
-        tests.append(_test_for_match(m, config, linepos, filename))
+        tests.append(_test_for_match(m, spec, linepos, filename))
         linepos += content.count('\n', m.start(), m.end())
         charpos = m.end()
     return cast(List[Test], tests)
 
 
-def _test_for_match(m: Match[str], config: Config, linepos: int, filename: str):
-    expr = _format_expr(m, config, linepos, filename)
+def _test_for_match(m: Match[str], spec: TestSpec, linepos: int, filename: str):
+    expr = _format_expr(m, spec, linepos, filename)
     expected = _format_expected(m, linepos, filename)
     return Test(expr, expected, filename, linepos + 1, {})
 
 
-def _format_expr(m: Match[str], config: Config, linepos: int, filename: str):
+def _format_expr(m: Match[str], spec: TestSpec, linepos: int, filename: str):
     lines = _dedented_lines(
         m.group("expr"),
         len(m.group("indent")),
         linepos,
         filename,
     )
-    return "\n".join(_strip_prompts(lines, config, linepos, filename))
+    return "\n".join(_strip_prompts(lines, spec, linepos, filename))
 
 
-def _strip_prompts(lines: List[str], config: Config, linepos: int, filename: str):
+def _strip_prompts(lines: List[str], spec: TestSpec, linepos: int, filename: str):
     return [
-        _strip_prompt(line, config.ps1 if i == 0 else config.ps2, linepos + i, filename)
+        _strip_prompt(line, spec.ps1 if i == 0 else spec.ps2, linepos + i, filename)
         for i, line in enumerate(lines)
     ]
 
@@ -409,18 +419,18 @@ def _check_test_indent(lines: List[str], indent: int, linepos: int, filename: st
             )
 
 
-def init_runtime(config: Config):
+def init_runtime(name: str):
     try:
-        import_spec = RUNTIME[config.runtime]
+        import_spec = RUNTIME[name]
     except KeyError:
-        raise RuntimeNotSupported(config.runtime)
+        raise RuntimeNotSupported(name)
     else:
         if "." not in import_spec:
-            raise ValueError(config.runtime)
+            raise ValueError(name)
         modname, classname = import_spec.rsplit(".", 1)
         mod = importlib.import_module(modname)
-        rt = getattr(mod, classname)()
-        rt.init(config)
+        rt = cast(Runtime, getattr(mod, classname)())
+        rt.start()
         return rt
 
 
@@ -438,9 +448,9 @@ def test_file(filename: str):
 
 
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
-    expected = _format_match_expected(test, state.config)
-    test_output = _format_match_test_output(result, test, state.config)
-    match = match_test_output(expected, test_output, test, state.config)
+    expected = _format_match_expected(test, state.spec)
+    test_output = _format_match_test_output(result, test, state.spec)
+    match = match_test_output(expected, test_output, test, state.spec)
     _log_test_result_match(match, result, test, expected, test_output, state)
     if match:
         _handle_test_passed(test, match, state)
@@ -448,9 +458,9 @@ def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
         _handle_test_failed(test, result, state)
 
 
-def _format_match_expected(test: Test, config: Config):
+def _format_match_expected(test: Test, spec: TestSpec):
     expected = _append_lf_for_non_empty(test.expected)
-    return _remove_blankline_markers(expected, config.blankline)
+    return _remove_blankline_markers(expected, spec.blankline)
 
 
 def _append_lf_for_non_empty(s: str):
@@ -461,9 +471,9 @@ def _remove_blankline_markers(s: str, marker: str):
     return re.sub(rf"(?m)^{re.escape(marker)}\s*?$", "", s)
 
 
-def _format_match_test_output(result: TestResult, test: Test, config: Config):
+def _format_match_test_output(result: TestResult, test: Test, spec: TestSpec):
     # TODO: If there are any transforms to test output that are option
-    # driven, etc - use test and config
+    # driven, etc - use test config
     return _truncate_empty_line_spaces(result.output)
 
 
@@ -471,17 +481,22 @@ def _truncate_empty_line_spaces(s: str):
     return re.sub(r"(?m)^[^\S\n]+$", "", s)
 
 
-def match_test_output(expected: str, test_output: str, test: Test, config: Config):
-    matcher = _test_output_matcher(test, config)
+def match_test_output(expected: str, test_output: str, test: Test, spec: TestSpec):
+    matcher = _test_output_matcher(test, spec)
     return matcher(expected, test_output)
 
 
-def _test_output_matcher(test: Test, config: Config):
+def _test_output_matcher(test: Test, spec: TestSpec):
     # TODO other matcher types:
-    # - _StrMatcher (support normalize whitespace, case insensitive, ellipsis)
+    # - _StrMatcher (support normalize whitespace, case insensitive,
+    #   ellipsis)
+
     # TODO default to _StrMatcher - use _ParserMatcher if +match
-    # TODO test/config options for _ParseMatcher: case, normalize whitspace
-    return _ParseMatcher(config.match_types)
+
+    # TODO test config options for _ParseMatcher: match types, case,
+    # normalize whitspace
+
+    return _ParseMatcher()
 
 
 class _ParseMatcher:
@@ -551,7 +566,7 @@ def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
 
 def _handle_test_failed(test: Test, result: TestResult, state: RunnerState):
     _print_failed_test_sep()
-    _print_failed_test(test, result, state.config)
+    _print_failed_test(test, result, state.spec)
     state.results["failed"] += 1
     state.results["tested"] += 1
 
@@ -560,17 +575,17 @@ def _print_failed_test_sep():
     print("**********************************************************************")
 
 
-def _print_failed_test(test: Test, result: TestResult, config: Config):
+def _print_failed_test(test: Test, result: TestResult, spec: TestSpec):
     print(f"File \"{test.filename}\", line {test.line}")
     print("Failed example:")
     _print_test_expr(test.expr)
     if test.expected:
         print("Expected:")
-        _print_test_expected(test.expected, config)
+        _print_test_expected(test.expected, spec)
     else:
         print("Expected nothing")
     print("Got:")
-    _print_test_result_output(result.output, config)
+    _print_test_result_output(result.output, spec)
 
 
 def _print_test_expr(s: str):
@@ -578,19 +593,19 @@ def _print_test_expr(s: str):
         print("    " + line)
 
 
-def _print_test_expected(s: str, config: Config):
+def _print_test_expected(s: str, spec: TestSpec):
     for line in s.split("\n"):
         print("    " + line)
 
 
-def _print_test_result_output(output: str, config: Config):
-    output = _format_test_result_output(output, config)
+def _print_test_result_output(output: str, spec: TestSpec):
+    output = _format_test_result_output(output, spec)
     for line in output.split("\n"):
         print("    " + line)
 
 
-def _format_test_result_output(output: str, config: Config):
-    output = _insert_blankline_markers(output, config.blankline)
+def _format_test_result_output(output: str, spec: TestSpec):
+    output = _insert_blankline_markers(output, spec.blankline)
     return _strip_trailing_lf(output)
 
 

@@ -8,28 +8,24 @@ test-options: +ELLIPSIS
 Python support is provided by the Python runtime defined in
 `groktest.python`.
 
-We can instanitate a Python runtime directly or by using
-`groktest.init_runtime`. In either case we need configuration.
-
-    >>> from groktest import PYTHON_CONFIG
-
 Use `init_runtime` to create an initialized instance of a Python
 runtime.
 
     >>> from groktest import init_runtime
 
-    >>> python = init_runtime(PYTHON_CONFIG)
+    >>> python = init_runtime("python")
 
 Confirm the runtime is available.
 
     >>> python.is_available()
     True
 
-Create a helper to execute test expressions.
+Create a helper to execute test expressions. We use the Python test spec
+for parsing.
 
     >>> def run_test(s):
-    ...     from groktest import parse_tests
-    ...     tests = parse_tests(s, PYTHON_CONFIG, "<test>")
+    ...     from groktest import parse_tests, PYTHON_SPEC
+    ...     tests = parse_tests(s, PYTHON_SPEC, "<test>")
     ...     assert len(tests) == 1
     ...     result = python.exec_test_expr(tests[0])
     ...     assert result.code in (0, 1), (result.code, result.output)
@@ -69,9 +65,9 @@ Various tests:
     ZeroDivisionError: division by zero
     <BLANKLINE>
 
-Shut down the runtime.
+Stop the runtime.
 
-    >>> python.shutdown()
+    >>> python.stop()
 
 Once shut down, the runtime is no longer available.
 

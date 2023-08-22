@@ -32,11 +32,13 @@ extend-exclude = "/groktest/_vendor_"
 
 include = [
   "README.md",
-  "docs/*.md"
+  "docs/*.md",
+  "examples/*.md"
 ]
 
-exclude = "docs/yaml.md"
+exclude = [
+  "docs/yaml.md",
+  "examples/unknown-format.md"
+]
 
-[tool.groktest.doctest]
-
-options = "+IGNORE_EXCEPTION_DETAIL +ELLIPSIS +NORMALIZE_WHITESPACE"
+options.doctest = "+IGNORE_EXCEPTION_DETAIL +ELLIPSIS +NORMALIZE_WHITESPACE"

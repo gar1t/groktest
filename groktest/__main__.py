@@ -17,6 +17,9 @@ from . import _vendor_tomli as toml
 log: logging.Logger = cast(logging.Logger, None)
 
 
+ProjectData = Dict[str, Any]
+
+
 class CmdConfig:
     def __init__(self, filenames: List[str]):
         self.filenames = filenames
@@ -28,11 +31,11 @@ def main():
 
     _init_logging(args)
 
-    config = _config_for_args(args)
+    _apply_last(args)
 
-    if not args.last:
-        # Call only after `_config_for_args()`
-        _save_last_paths(args.paths)
+    config = _cmd_config(args)
+
+    _maybe_save_last(args)
 
     failed = tested = 0
 
@@ -92,28 +95,11 @@ def _init_parser():
     return p
 
 
-def _config_for_args(args: Any):
-    paths = (args.last and _last_paths()) or args.paths
-    config = _project_config(paths) or CmdConfig(paths)
-    _apply_args_to_config(args, config)
-    return config
-
-
-def _filenames_for_args(args: Any):
+def _apply_last(args: Any):
     if args.last:
-        if args.paths:
-            raise SystemExit(
-                "Cannot specify both PATH and --last\n"  # \
-                "Try 'groktest -h' for help."
-            )
-        return _last_paths()
-    else:
-        if not args.paths:
-            raise SystemExit(
-                "Nothing to test (expected PATH or --last)\n"  # \
-                "Try 'groktest -h' for help."
-            )
-        return args.paths
+        last = _last_paths()
+        assert last
+        args.paths = last
 
 
 def _last_paths():
@@ -137,44 +123,54 @@ def _last_paths_savefile():
     return os.path.join(tempfile.gettempdir(), "groktest.last")
 
 
-def _project_config(paths: List[str]):
-    if paths:
-        project_config = _try_load_toml(paths[0])
-        if project_config:
-            if len(paths) > 1:
-                raise SystemExit(
-                    f"Groktest does not yet support SUITE args ('{paths[1]}')"
-                )
-            return _config_for_project_data(project_config)
-    return None
+def _maybe_save_last(args: Any):
+    if not args.last:
+        with open(_last_paths_savefile(), "w") as f:
+            json.dump(args.paths, f)
 
 
-def _try_load_toml(path: str):
+def _cmd_config(args: Any):
+    return _try_project_config(args) or _default_config(args)
+
+
+def _try_project_config(args: Any):
+    if not args.paths:
+        return None
+    project_data = _try_project_data(args.paths[0])
+    if not project_data:
+        return None
+    return _cmd_config_for_project_data(project_data, args)
+
+
+def _try_project_data(path: str):
     candidates = [path, os.path.join(path, "pyproject.toml")]
     for filename in [path for path in candidates if os.path.isfile(path)]:
-        data = _try_load_toml_(filename)
-        if data:
-            return data
+        try:
+            return _load_toml(filename)
+        except FileNotFoundError:
+            pass
+        except TypeError:
+            pass
     return None
 
 
-def _try_load_toml_(filename: str):
+def _load_toml(filename: str):
     try:
         f = open(filename, "rb")
     except FileNotFoundError:
-        return None
+        raise
     with f:
         try:
             data = toml.load(f)
-        except toml.TOMLDecodeError:
-            return None
+        except toml.TOMLDecodeError as e:
+            raise TypeError from e
         else:
             log.debug("using project config in %s", filename)
             data["__filename__"] = filename
             return data
 
 
-def _config_for_project_data(data: Dict[str, Any]):
+def _cmd_config_for_project_data(data: Dict[str, Any], any: Any):
     try:
         groktest_data = data["tool"]["groktest"]
     except KeyError:
@@ -220,14 +216,8 @@ def _apply_test_patterns(patterns: List[str], desc: str):
     return filenames
 
 
-def _apply_args_to_config(args: Any, config: CmdConfig):
-    # TODO: apply applicable args to config as overrides
-    pass
-
-
-def _save_last_paths(filenames: List[str]):
-    with open(_last_paths_savefile(), "w") as f:
-        json.dump(filenames, f)
+def _default_config(args: Any):
+    return CmdConfig(args.paths)
 
 
 if __name__ == "__main__":

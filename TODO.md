@@ -2,96 +2,9 @@
 
 ## Error support
 
-- How do we explicitly handle an 'error' (non-zero code)
-- Consider Python (doctest as model) and also shell (`<exit N>` as
-  optional last-line on success, required on error)
-
-`doctest` shows something like this:
-
-```
-Failed example:
-    groktest.DEFAULT_CONFIG.ps1
-Exception raised:
-    Traceback (most recent call last):
-      File "/usr/lib/python3.10/doctest.py", line 1350, in __run
-        exec(compile(example.source, filename, "single",
-      File "<doctest parsing.md[0]>", line 1, in <module>
-        groktest.DEFAULT_CONFIG.ps1
-    NameError: name 'groktest' is not defined
-```
-
-There's an explicit notion of 'error' here. The report does not show
-output printed to standard outout during the evaluation of the
-expression.
-
-When an exception doesn't occur, output looks like this:
-
-```
-Failed example:
-    1
-Expected:
-    2
-Got:
-    1
-```
-
-We *could* implement something like this:
-
-```
-Failed example:
-    groktest.DEFAULT_CONFIG.ps1
-Expected nothing
-Got:
-    Traceback (most recent call last):
-      File "/usr/lib/python3.10/doctest.py", line 1350, in __run
-        exec(compile(example.source, filename, "single",
-      File "<doctest parsing.md[0]>", line 1, in <module>
-        groktest.DEFAULT_CONFIG.ps1
-    NameError: name 'groktest' is not defined
-```
-
-In the case of `shell`, we could face something similar, where non-zero
-exit is an 'error'.
-
-```
-Failed example:
-    echo Boom
-    exit 1
-Exit (1):
-    Boom
-```
-
-If it were an empty result:
-
-```
-Failed example:
-    exit 1
-Exit (1)
-```
-
-If we used the expected/got idiom the report might look like this:
-
-```
-Failed example:
-  echo Boom
-  exit 1
-Expected:
-  Boom
-  <exit 0>
-Got:
-  Boom
-  <exit 1>
-```
-
-I don't really see the point of treating an error differently. The
-`doctest` method loses the 'expected' report and sets the pattern up for
-other runtimes.
-
-I believe this is simply a reporting topic.
-
-Let's proceed with the got/expected pattern for errors, as well as
-success (treating them as no different, except possibly some
-reformatting).
+- How do we deal with exception detail? Arguably this should be ignored
+  by default with an option to not ignore. How does this work in
+  doctest?
 
 ## Think about the `assert` pattern
 
@@ -111,9 +24,11 @@ We just need decent error reporting in this case.
 - Project level
   - [ ] general
   - [ ] doctest
+
 - Front-matter
   - [ ] general
   - [x] doctest
+
 - Per test
   - [ ] general
   - [x] doctest
@@ -132,7 +47,7 @@ respectively.
 
 Examples:
 
-    >>> print("{}")  # -match
+    >>> print("{}")  # -parse
     {}
 
 Needed options:

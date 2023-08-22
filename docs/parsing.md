@@ -33,7 +33,7 @@ tests.
 
 ## Default configuration
 
-Default configuration is provided by `groktest.DEFAULT_CONFIG`.
+Default configuration is provided by `groktest.DEFAULT_SPEC`.
 
 ### Test pattern
 
@@ -44,12 +44,12 @@ the test expected outout.
 
 Groktest's default pattern uses the `doctest` prompts.
 
-    >>> from groktest import DEFAULT_CONFIG
+    >>> from groktest import DEFAULT_SPEC
 
-    >>> DEFAULT_CONFIG.ps1
+    >>> DEFAULT_SPEC.ps1
     '>>>'
 
-    >>> DEFAULT_CONFIG.ps2
+    >>> DEFAULT_SPEC.ps2
     '...'
 
     >>> (1 +
@@ -59,7 +59,7 @@ Groktest's default pattern uses the `doctest` prompts.
 Function to print found tests using the default configuration:
 
     >>> def find_tests(s):
-    ...     for m in DEFAULT_CONFIG.test_pattern.finditer(s):
+    ...     for m in DEFAULT_SPEC.test_pattern.finditer(s):
     ...         pprint(m.groupdict())
 
 Single line test expression, no expexted output, no indent:
@@ -100,7 +100,7 @@ Function to parse string input and print parsed tests.
     ...     import groktest
     ...
     ...     for i, test in enumerate(groktest.parse_tests(
-    ...         s, DEFAULT_CONFIG, "<test>"
+    ...         s, DEFAULT_SPEC, "<test>"
     ...     )):
     ...         if i > 0:
     ...             print("---")
