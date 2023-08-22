@@ -439,8 +439,8 @@ def test_file(filename: str):
 
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
     expected = _format_match_expected(test, state.config)
-    test_output = _format_match_test_output(result, state.config)
-    match = match_test_output(expected, test_output, state.config.match_types)
+    test_output = _format_match_test_output(result, test, state.config)
+    match = match_test_output(expected, test_output, test, state.config)
     _log_test_result_match(match, result, test, expected, test_output, state)
     if match:
         _handle_test_passed(test, match, state)
@@ -461,9 +461,9 @@ def _remove_blankline_markers(s: str, marker: str):
     return re.sub(rf"(?m)^{re.escape(marker)}\s*?$", "", s)
 
 
-def _format_match_test_output(result: TestResult, config: Config):
+def _format_match_test_output(result: TestResult, test: Test, config: Config):
     # TODO: If there are any transforms to test output that are option
-    # driven, etc
+    # driven, etc - use test and config
     return _truncate_empty_line_spaces(result.output)
 
 
@@ -471,28 +471,40 @@ def _truncate_empty_line_spaces(s: str):
     return re.sub(r"(?m)^[^\S\n]+$", "", s)
 
 
-def match_test_output(
-    expected: str,
-    test_output: str,
-    match_types: Optional[MatchTypes] = None,
-    case_sensitive: bool = False,
-):
-    # TODO - lots of options here!
-    # - is this a pattern match?
-    # - is this an ellipsis match?
-    # - is this some other type of match??
+def match_test_output(expected: str, test_output: str, test: Test, config: Config):
+    matcher = _test_output_matcher(test, config)
+    return matcher(expected, test_output)
 
-    m = parselib.parse(
-        expected,
-        test_output,
-        {
-            **_parselib_user_match_types(match_types or {}),
-            **_parselib_builtin_match_types(),
-        },
-        evaluate_result=True,
-        case_sensitive=case_sensitive,
-    )
-    return TestMatch(cast(parselib.Result, m).named) if m else None
+
+def _test_output_matcher(test: Test, config: Config):
+    # TODO other matcher types:
+    # - _StrMatcher (support normalize whitespace, case insensitive, ellipsis)
+    # TODO default to _StrMatcher - use _ParserMatcher if +match
+    # TODO test/config options for _ParseMatcher: case, normalize whitspace
+    return _ParseMatcher(config.match_types)
+
+
+class _ParseMatcher:
+    def __init__(
+        self,
+        match_types: Optional[MatchTypes] = None,
+        case_sensitive: bool = True,
+    ):
+        self.match_types = match_types
+        self.case_sensitive = case_sensitive
+
+    def __call__(self, expected: str, test_output: str):
+        m = parselib.parse(
+            expected,
+            test_output,
+            {
+                **_parselib_user_match_types(self.match_types or {}),
+                **_parselib_builtin_match_types(),
+            },
+            evaluate_result=True,
+            case_sensitive=self.case_sensitive,
+        )
+        return TestMatch(cast(parselib.Result, m).named) if m else None
 
 
 def _parselib_user_match_types(match_types: MatchTypes):

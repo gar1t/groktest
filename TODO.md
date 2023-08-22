@@ -124,7 +124,7 @@ verbose than what we'd like.
 Proposal is to use this pattern:
 
     [-+] (?P<name>\w+) |
-    [+]  (?P<name>\w+) = (?P<value>.+)
+    [+]  (?P<name>\w+) = ["']?(?P<value>.+)["']?
 
 This supports negation or deletion of options using `-<name>` options
 and enabling or setting options using `+<name>` and `+<name>=<value>`
@@ -137,44 +137,51 @@ Examples:
 
 Needed options:
 
-- `match`
+- `parse`
 
-   Output is patterns are matched. Disabled by default.
+   Output is matched using the `parse` library. Disabled by default.
 
    Defaults to false to avoid collisions with curly braces, which are
    common in Python data representation.
 
-   This should pass by default.
+   This should pass by default:
 
    ```
    >>> {"foo": 123}
    {"foo": 123}
    ```
 
-   To pattern match this example, `+match` is used with a modified
+   To pattern match this example, `+parse` is used with a modified
    example.
 
    ```
-   >>> {"foo": 123}  # +match
+   >>> {"foo": 123}  # +parse
    {{"foo": {:d}}}
+   ```
+
+   As with any option, `parse` can be enabled for all tests using front
+   matter.
+
+   ```
+   test-options: +parse
    ```
 
 - `case`
 
   Output matching is case-sensitive. Enabled by default.
 
-  Disable for case-insensitive matches.
+  Disable for case-insensitive matches using `-case`.
 
   ```
   >>> "Hello"  # -case
-  hello
+  'hello'
   ```
 
 - `skip`
 
   Skips a test. Disabled by default.
 
-  An entire test file can be skipped by enabling this option in
+  All tests in a test file can be skipped by enabling this option in
   front-matter. Individual tests can be unskipped using `-skip` in this
   case.
 
@@ -195,6 +202,48 @@ Needed options:
 
   Soloing one or more tests is an easy way to run only certain tests.
   This is useful when debugging a failing test.
+
+- `blankline`
+
+  A value specified the blank line marker. Default is config specific.
+
+  E.g. `+blankline=<BLANKLINE>` set the `doctest` marker.
+
+  Use `-blankline` to prevent use of blank lines in examples.
+
+- `wildcard`
+
+  Match any output using a wildcard token. Disabld by default.
+
+  When enabled the configured wildcard will match any pattern up until
+  the output following the wildcard token.
+
+  The default wildcard token is `...`. Other test types may use
+  different tokens.
+
+  ```
+  >>> print("Hello foo bar")  # +wildcard
+  Hello ...
+  ```
+
+  The option may be used to set the token. For example `+wildcard=*`
+  sets `*` as the wildcard.
+
+  ```
+  >>> print("Hello foo bar")  # +wildcard=*
+  Hello *
+  ```
+
+  The wildcard can be configured for all tests in a test file using the
+  file front matter.
+
+- `whitespace`
+
+  Consider whitespace when comparing expected and test output. Enabled
+  by default.
+
+  To disregard whitespace in matches, disable the option using
+  `-whitespace`.
 
 ## Globals config
 

@@ -25,7 +25,9 @@ otherwise it fails. Groktest supports methods for comparing test results
 to expected output. By default, output must match exactly. See below for
 alternative matching schemes.
 
-    >>> True  # +fails  TODO: 1) `-match` by default 2) `fails` option
+TODO: Test options
+
+    >> True  # +fails
     true
 
 Test expressions may span multiple lines using PS2.
@@ -34,7 +36,8 @@ Test expressions may span multiple lines using PS2.
     ...  1)
     2
 
-If a test expression prints to standard output, that output is included when comparing expected output.
+If a test expression prints to standard output, that output is included
+when comparing expected results.
 
     >>> print("Hello")
     Hello
@@ -52,21 +55,20 @@ output, the evaluated result is included after printed output.
 
 ## Blank lines
 
-As with `doctest`, Groktest requires that expected output contain only
-non-empty lines. An empty line signifies the end of the expected output
-block. For this reason, blank lines in test result output are encoded
-using a non-blank token.
-
-`doctest` uses the token `<BLANKLINE>` to represent a blank line in test
-outout.
-
-Groktest uses the token `|` (pipe character).
+Groktest requires that expected output contain only non-blank lines. To
+represent a blank line in expected output, use a blank line marker.
+Groktest uses the token `|` (pipe character) to represent a blank line.
+This is equivalent to `<BLANKLINE>` in `doctest`.
 
     >>> print("")
     |
 
     >>> print("\n")
     |
+    |
+
+    >>> print("foo\n")
+    foo
     |
 
     >>> print("""
@@ -95,5 +97,16 @@ Groktest uses the token `|` (pipe character).
 To match a literal pipe char on a single line, use the match type
 `pipe`.
 
+TODO: Not supporting format matching by default
+TODO: Use `-blankline` option to opt out of this deal
+
     >>> print("|")
     {:pipe}
+
+    >> print("|")  # -blankline
+    |
+
+    >> print("|\n\n|")  # +blankline=<BLANKLINE>
+    |
+    <BLANKLINE>
+    |
