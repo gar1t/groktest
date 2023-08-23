@@ -151,7 +151,7 @@ def _test_filenames(config: Optional[ProjectConfig], args: Any):
     try:
         include = _coerce_list(config["include"])
     except KeyError:
-        src = config["__filename__"]
+        src = config["__src__"]
         raise SystemExit(f"Missing 'include' in 'tool.groktest' section in {src}")
     else:
         return _filenames_for_test_patterns(

@@ -43,6 +43,6 @@ exclude = [
 
 python-init = """
 from groktest import load_project_config
-from os.path import dirname
+from os import path
 import re
 """

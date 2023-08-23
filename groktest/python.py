@@ -25,6 +25,11 @@ from .__init__ import TestSpec
 log = logging.getLogger("groktest.python")
 
 
+class Init:
+    def __init__(self, expr: str):
+        self.expr = expr
+
+
 class TestExpr:
     def __init__(
         self, expr: str, filename: Optional[str], compile_flags: Optional[int]
@@ -34,9 +39,9 @@ class TestExpr:
         self.compile_flags = compile_flags
 
 
-class Init:
-    def __init__(self, expr: str):
-        self.expr = expr
+class Vars:
+    def __init__(self, vars: Dict[str, Any]):
+        self.vars = vars
 
 
 class PythonRuntime(Runtime):
@@ -51,9 +56,7 @@ class PythonRuntime(Runtime):
         return _exec_test_expr(test, _check_proc(self._p))
 
     def handle_bound_variables(self, bound_variables: Dict[str, Any]):
-        # TODO Update proc with bound_variables - e.g. {"type": "vars":
-        # "vars", bound_variables}
-        pass
+        _update_vars(bound_variables, _check_proc(self._p))
 
     def shutdown(self, timeout: int = 5):
         if self._p:
@@ -132,6 +135,12 @@ def _write_req(req: str, out: IO[str]):
     out.flush()
 
 
+def _read_ack(input: IO[str]):
+    resp = json.loads(input.readline())
+    if resp != "ack":
+        raise RuntimeError(resp)
+
+
 def _exec_test_expr(test: Test, proc: Popen[str]):
     stdin, stdout = _proc_streams(proc)
     _write_test_req(test, stdin)
@@ -155,14 +164,19 @@ def _read_test_result(input: IO[str]):
     return TestResult(resp["code"], resp["output"])
 
 
-def _read_ack(input: IO[str]):
-    resp = json.loads(input.readline())
-    if resp != "ack":
-        raise RuntimeError(resp)
+def _update_vars(vars: Dict[str, Any], proc: Popen[str]):
+    stdin, stdout = _proc_streams(proc)
+    _write_vars_req(vars, stdin)
+    _read_ack(stdout)
+
+
+def _write_vars_req(vars: Dict[str, Any], out: IO[str]):
+    req = json.dumps({"type": "vars", "vars": vars})
+    _write_req(req, out)
 
 
 def _main_loop():
-    globals = {}
+    globals = _init_globals()
     while True:
         line = _readline()
         if not line:
@@ -170,10 +184,24 @@ def _main_loop():
         req = _decode_request(line)
         if isinstance(req, TestExpr):
             _handle_test(req, globals)
+        elif isinstance(req, Vars):
+            _handle_vars(req, globals)
         elif isinstance(req, Init):
             _handle_init(req, globals)
         else:
             assert False, req
+
+
+def _init_globals():
+    from pprint import pprint as pprint0
+
+    def pprint(s: str, **kw: Any):
+        kw = dict(width=72, **kw)
+        pprint0(s, **kw)
+
+    return {
+        "pprint": pprint,
+    }
 
 
 def _readline():
@@ -188,6 +216,8 @@ def _decode_request(line: str):
             filename=data.get("filename"),
             compile_flags=data.get("compfile-flags"),
         )
+    elif data["type"] == "vars":
+        return Vars(data["vars"])
     elif data["type"] == "init":
         return Init(data["expr"])
     else:
@@ -279,6 +309,16 @@ def _writeline(line: str):
     sys.stdout.write(line)
     sys.stdout.write("\n")
     sys.stdout.flush()
+
+
+def _handle_vars(vars: Vars, globals: Dict[str, Any]):
+    _log_vars(vars)
+    globals.update(vars.vars)
+    _writeline(_encode_ack())
+
+
+def _log_vars(vars: Vars):
+    log.debug("Updating variables: %r", vars.vars)
 
 
 def _handle_init(init: Init, globals: Dict[str, Any]):

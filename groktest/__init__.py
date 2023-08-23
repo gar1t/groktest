@@ -208,6 +208,10 @@ TestOptions = Dict[str, Any]
 
 MatchTypes = Dict[str, str]
 
+FRONT_MATTER_TO_CONFIG = {
+    "test-options": "options",
+}
+
 
 def init_runner_state(filename: str, project_config: Optional[ProjectConfig] = None):
     filename = os.path.abspath(filename)
@@ -490,7 +494,48 @@ def _test_config(
     filename: str,
 ):
     project_config = project_config or _try_test_file_project_config(filename) or {}
-    return {**project_config, **test_fm}
+    return _merge_test_config(project_config, test_fm)
+
+
+def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> TestConfig:
+    test_fm = _map_fm_option_names(test_fm)
+    # Merge with project taking precedence over front matter
+    merged = {**test_fm, **project_config}
+    # Selectively merge/append front matter back to merged
+    _merge_replace("options", test_fm, merged)
+    _merge_append("python-init", test_fm, merged)
+    return merged
+
+
+def _map_fm_option_names(fm: FrontMatter) -> FrontMatter:
+    return {FRONT_MATTER_TO_CONFIG.get(name, name): fm[name] for name in fm}
+
+
+def _merge_replace(name: str, src: Dict[str, Any], dest: Dict[str, Any]):
+    try:
+        src_val = src[name]
+    except KeyError:
+        pass
+    else:
+        dest[name] = src_val
+
+
+def _merge_append(name: str, src: Dict[str, Any], dest: Dict[str, Any]):
+    try:
+        src_val = src[name]
+    except KeyError:
+        pass
+    else:
+        try:
+            dest_val = dest[name]
+        except KeyError:
+            dest[name] = src_val
+        else:
+            dest[name] = _coerce_list(src_val) + _coerce_list(dest_val)
+
+
+def _coerce_list(x: Any) -> List[Any]:
+    return x if isinstance(x, list) else [x]
 
 
 def _try_test_file_project_config(filename: str):
@@ -726,7 +771,7 @@ def _doctest_file(filename: str, config: TestConfig):
 
 
 def _doctest_options(config: TestConfig):
-    opts = config.get("test-options")
+    opts = config.get("options")
     if not opts:
         return 0
     if not isinstance(opts, str):
@@ -768,7 +813,7 @@ def load_project_config(filename: str):
     try:
         data = _load_toml(filename)
     except toml.TOMLDecodeError as e:
-        raise ProjectDecodeError(e) from None
+        raise ProjectDecodeError(e, filename) from None
     else:
         return _project_config_for_data(data) if data else None
 
@@ -785,7 +830,7 @@ def _load_toml(filename: str):
             raise
         else:
             log.debug("using project config in %s", filename)
-            data["__filename__"] = filename
+            data["__src__"] = filename
             return data
 
 
@@ -795,5 +840,5 @@ def _project_config_for_data(data: Dict[str, Any]):
     except KeyError:
         return None
     else:
-        groktest_data["__filename__"] = data["__filename__"]
+        groktest_data["__src__"] = data["__src__"]
         return cast(ProjectConfig, groktest_data)
