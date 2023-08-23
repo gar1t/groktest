@@ -376,7 +376,10 @@ def _default_spec_for_missing_or_invalid_front_matter(fm: Any, filename: str):
 
 def _spec_for_test_type(fm: Dict[str, Any], filename: str):
     assert isinstance(fm, dict)
-    test_type = fm.get("test-type")
+    try:
+        test_type = fm["tool"]["groktest"]["type"]
+    except KeyError:
+        test_type = fm.get("test-type")
     if not test_type:
         return None
     try:
@@ -498,16 +501,23 @@ def _test_config(
 
 
 def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> TestConfig:
-    test_fm = _map_fm_option_names(test_fm)
-    # Merge with project taking precedence over front matter
-    merged = {**test_fm, **project_config}
-    # Selectively merge/append front matter back to merged
+    test_config = _normalize_front_matter(test_fm)
+    # Start with project taking precedence over test config
+    merged = {**test_config, **project_config}
+    # Selectively merge/append test config back into result
     _merge_replace("options", test_fm, merged)
     _merge_append("python-init", test_fm, merged)
     return merged
 
 
-def _map_fm_option_names(fm: FrontMatter) -> FrontMatter:
+def _normalize_front_matter(fm: FrontMatter) -> TestConfig:
+    try:
+        return fm["tool"]["groktest"]
+    except KeyError:
+        return _map_front_matter_option_names(fm)
+
+
+def _map_front_matter_option_names(fm: FrontMatter) -> TestConfig:
     return {FRONT_MATTER_TO_CONFIG.get(name, name): fm[name] for name in fm}
 
 

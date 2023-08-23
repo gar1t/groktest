@@ -2,19 +2,7 @@
 
 - Str matcher
 - Test options - mainly interested in wildcard and whitespace
-
-## Think about the `assert` pattern
-
-This is messy:
-
-    >>> foo < 33, foo
-    (True, {})
-
-This is better:
-
-    >>> assert foo < 33
-
-We just need decent error reporting in this case.
+- Better handling of exception detail (auto ignore)
 
 ## Test options
 

@@ -1,6 +1,10 @@
 ---
-test-type: doctest
-test-options: +ELLIPSIS
+# Use TOML as alternative config
+
+test-type = "doctest"
+
+[tool.groktest]
+options = "+ELLIPSIS"
 ---
 
 # Test runners

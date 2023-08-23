@@ -1,6 +1,7 @@
 ---
-test-type: doctest
-test-options: +ELLIPSIS
+[tool.groktest]
+type = "doctest"
+options = "+ELLIPSIS"
 ---
 
 # Python support
