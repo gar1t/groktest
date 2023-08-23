@@ -1,3 +1,7 @@
+---
+test-options: +wildcard
+---
+
 # Using `assert` in tests
 
 Assertions are useful for testing values that aren't suitable for
@@ -20,7 +24,7 @@ In the case above, we just get this:
 
     >>> assert 0 <= x <= 100
     Traceback (most recent call last):
-    {}
+    ...
     AssertionError
 
 This output doesn't tell us anything about `x`.
@@ -30,7 +34,7 @@ provides diagnistic values.
 
     >>> assert 0 <= x <= 100, x
     Traceback (most recent call last):
-    {}
+    ...
     AssertionError: 101
 
 With this report, we know `x` is 101 and can take appropriate next steps

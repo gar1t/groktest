@@ -1,6 +1,9 @@
 # Groktest To Do
 
 - Str matcher
+  - Wildcard
+  - Ignore exception detail by default
+
 - Test options - mainly interested in wildcard and whitespace
 - Better handling of exception detail (auto ignore)
 
@@ -149,6 +152,63 @@ Needed options:
 
   Normalize paths to be `/` or `\`. Defaults to disabled and `/` if
   enabled without an explicit value.
+
+### Implementation notes
+
+Current match def:
+
+```python
+
+    def match_test_output(
+        expected: str,
+        test_output: str,
+        test: Test,
+        spec: TestSpec
+    ):
+        pass
+
+```
+
+What do we need to implement each option?
+
+Option can be defined in project config, in front matter and for a test.
+
+The test will have "test options", so we need those.
+
+Options will come from the higher level sources so we need those.
+
+These could all be rolled into a single 'options' that goes to the match
+function.
+
+Working match def:
+
+```python
+    def match_test_output(
+        expected: str,
+        test_output: str,
+        options: TestOptions
+    ):
+        return matcher(options)(expected, test_output, options)
+
+```
+
+- `parse`
+
+  - Enabled -> `parse_match`
+  - Disabled -> `str_match`
+
+- `case`
+
+  - Parse match -> use for `case_sensitive` flag
+  - Str match -> use to `.lower()`
+
+- `skip`
+- `fails`
+- `solo`
+- `blankline`
+- `wildcard`
+- `whitespace`, `ws`
+- `paths`
 
 ## Globals config
 

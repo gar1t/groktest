@@ -20,7 +20,7 @@ __all__ = [
     "init_runner_state",
     "init_runtime",
     "match_test_output",
-    "MatchTypes",
+    "ParseTypes",
     "parse_tests",
     "ProjectDecodeError",
     "PYTHON_SPEC",
@@ -32,6 +32,7 @@ __all__ = [
     "SPECS",
     "Test",
     "TestMatch",
+    "TestMatcher",
     "TestResult",
     "TestSpec",
     "TestTypeNotSupported",
@@ -64,6 +65,7 @@ class TestSpec:
         ps2: str,
         test_pattern: str,
         blankline: str,
+        wildcard: str,
     ):
         self.runtime = runtime
         self.ps1 = ps1
@@ -76,9 +78,19 @@ class TestSpec:
             re.MULTILINE | re.VERBOSE,
         )
         self.blankline = blankline
+        self.wildcard = wildcard
 
 
 TestOptions = Dict[str, Any]
+
+
+class TestMatch:
+    def __init__(self, match: bool, vars: Optional[Dict[str, Any]] = None):
+        self.match = match
+        self.vars = vars
+
+
+TestMatcher = Callable[[str, str, Optional[TestOptions]], TestMatch]
 
 
 class Test:
@@ -97,11 +109,6 @@ class TestResult:
         self.output = output
 
 
-class TestMatch:
-    def __init__(self, bound_variables: Dict[str, Any]):
-        self.bound_variables = bound_variables
-
-
 class Runtime:
     def init(self, config: Optional[TestConfig] = None) -> None:
         raise NotImplementedError()
@@ -109,7 +116,7 @@ class Runtime:
     def exec_test_expr(self, test: Test) -> TestResult:
         raise NotImplementedError()
 
-    def handle_bound_variables(self, bound_variables: Dict[str, Any]) -> None:
+    def handle_test_match(self, match: TestMatch) -> None:
         raise NotImplementedError()
 
     def shutdown(self, timeout: int = 0) -> None:
@@ -182,6 +189,7 @@ PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     ps2="...",
     test_pattern=DEFAULT_TEST_PATTERN,
     blankline="|",
+    wildcard="...",
 )
 
 Marker = Any
@@ -206,7 +214,7 @@ TestConfig = Dict[str, Any]
 
 TestOptions = Dict[str, Any]
 
-MatchTypes = Dict[str, str]
+ParseTypes = Dict[str, str]
 
 FRONT_MATTER_TO_CONFIG = {
     "test-options": "options",
@@ -403,6 +411,7 @@ def _explicit_spec(fm: Any, filename: str):
             ps2=fm["ps2"],
             test_pattern=fm["test-pattern"],
             blankline=fm["blankline"],
+            wildcard=fm["wildcard"],
         )
     except KeyError as e:
         log.warning(
@@ -603,7 +612,7 @@ def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
     test_output = _format_match_test_output(result, test, state.spec)
     match = match_test_output(expected, test_output, test, state.spec)
     _log_test_result_match(match, result, test, expected, test_output, state)
-    if match:
+    if match.match:
         _handle_test_passed(test, match, state)
     else:
         _handle_test_failed(test, result, state)
@@ -633,55 +642,50 @@ def _truncate_empty_line_spaces(s: str):
 
 
 def match_test_output(expected: str, test_output: str, test: Test, spec: TestSpec):
-    matcher = _test_output_matcher(test, spec)
-    return matcher(expected, test_output)
+    options = cast(TestOptions, {})
+    return matcher(options)(expected, test_output, options)
 
 
-def _test_output_matcher(test: Test, spec: TestSpec):
-    # TODO other matcher types:
-    # - _StrMatcher (support normalize whitespace, case insensitive,
-    #   ellipsis)
-
-    # TODO default to _StrMatcher - use _ParserMatcher if +match
-
-    # TODO test config options for _ParseMatcher: match types, case,
-    # normalize whitspace
-
-    return _ParseMatcher()
+def matcher(options: TestOptions) -> TestMatcher:
+    if options.get("parse"):
+        return parse_match
+    return str_match
 
 
-class _ParseMatcher:
-    def __init__(
-        self,
-        match_types: Optional[MatchTypes] = None,
-        case_sensitive: bool = True,
-    ):
-        self.match_types = match_types
-        self.case_sensitive = case_sensitive
-
-    def __call__(self, expected: str, test_output: str):
-        m = parselib.parse(
-            expected,
-            test_output,
-            {
-                **_parselib_user_match_types(self.match_types or {}),
-                **_parselib_builtin_match_types(),
-            },
-            evaluate_result=True,
-            case_sensitive=self.case_sensitive,
-        )
-        return TestMatch(cast(parselib.Result, m).named) if m else None
+def parse_match(
+    expected: str,
+    test_output: str,
+    options: Optional[TestOptions] = None,
+):
+    options = options or {}
+    extra_types = _parselib_types(options.get("types") or {})
+    case_sensitive = _opt_value("case", options, True)
+    m = parselib.parse(
+        expected,
+        test_output,
+        extra_types,
+        evaluate_result=True,
+        case_sensitive=case_sensitive,
+    )
+    if m:
+        return TestMatch(True, cast(parselib.Result, m).named)
+    return TestMatch(False)
 
 
-def _parselib_user_match_types(match_types: MatchTypes):
+def _opt_value(name: str, options: Dict[str, Any], default: Any):
+    try:
+        val = options[name]
+    except KeyError:
+        return default
+    else:
+        return default if val is None else val
+
+
+def _parselib_types(types: ParseTypes):
     return {
         type_name: _parselib_regex_converter(pattern)
-        for type_name, pattern in match_types.items()
+        for type_name, pattern in types.items()
     }
-
-
-def _parselib_builtin_match_types():
-    return {"pipe": _parselib_regex_converter(r"\|")}
 
 
 def _parselib_regex_converter(pattern: str):
@@ -692,8 +696,77 @@ def _parselib_regex_converter(pattern: str):
     return f
 
 
+def str_match(
+    expected: str,
+    test_output: str,
+    options: Optional[TestOptions] = None,
+):
+    options = options or {}
+    case_sensitive = _opt_value("case", options, True)
+    if not case_sensitive:
+        expected = expected.lower()
+        test_output = test_output.lower()
+    wildcard = options.get("wildcard")
+    if wildcard:
+        return _wildcard_match(expected, test_output, wildcard, options)
+    return _default_str_match(expected, test_output, options)
+
+
+def _wildcard_match(
+    expected: str,
+    test_output: str,
+    wildcard: str,
+    options: Optional[TestOptions],
+):
+    # Credit: Python doctest authors
+    expected_parts = expected.split(wildcard)
+    if len(expected_parts) == 1:
+        return TestMatch(expected == test_output)
+
+    # Match prior to first wildcard
+    startpos, endpos = 0, len(test_output)
+    expected_part = expected_parts[0]
+    if expected_part:
+        if not test_output.startswith(expected_part):
+            return TestMatch(False)
+        startpos = len(expected_part)
+        del expected_parts[0]
+
+    # Match after last wildcard
+    expected_part = expected_parts[-1]
+    if expected_part:
+        if not test_output.endswith(expected_part):
+            return TestMatch(False)
+        endpos -= len(expected_part)
+        del expected_parts[-1]
+
+    if startpos > endpos:
+        # Exact end matches required more characters than we have, as in
+        # _wildcard_match('aa...aa', 'aaa')
+        return TestMatch(False)
+
+    # For the rest, find the leftmost non-overlapping match for each
+    # part. If there's no overall match that way alone, there's no
+    # overall match period.
+    for expected_part in expected_parts:
+        startpos = test_output.find(expected_part, startpos, endpos)
+        if startpos < 0:
+            return TestMatch(False)
+        startpos += len(expected_part)
+
+    return TestMatch(True)
+
+
+def _default_str_match(
+    expected: str,
+    test_output: str,
+    options: Optional[TestOptions] = None,
+):
+    return TestMatch(True) if test_output == expected else TestMatch(False)
+
+
 def _log_test_result_match(
-    match: Optional[TestMatch],
+    match: TestMatch,
     result: TestResult,
     test: Test,
     used_expected: str,
@@ -702,8 +775,8 @@ def _log_test_result_match(
 ):
     log.debug("Result for %r", test.expr)
     log.debug("  match: %s", "yes" if match else "no")
-    if match:
-        log.debug("  bound variables: %s", match.bound_variables)
+    if match.match:
+        log.debug("  match vars: %s", match.vars)
     log.debug("  test expected: %r", test.expected)
     log.debug("  test result: (%r) %r", result.code, result.output)
     log.debug("  used expected: %r", used_expected)
@@ -711,7 +784,7 @@ def _log_test_result_match(
 
 
 def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
-    state.runtime.handle_bound_variables(match.bound_variables)
+    state.runtime.handle_test_match(match)
     state.results["tested"] += 1
 
 

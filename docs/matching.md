@@ -1,30 +1,100 @@
 ---
-test-type: doctest
+test-type = "doctest"
+
+# [tool.groktest]
+# types.color = "blue|red"  # Future!
 ---
 
-# Matching test result output and expected
+# Matching test results
+
+## String matching
+
+String matching is used by default. It's implemented by
+`groktest.str_match`.
+
+    >>> def str_match(expected, test_output, options=None):
+    ...     from groktest import str_match as str_match0
+    ...     m = str_match0(expected, test_output, options)
+    ...     pprint(m.match)
+
+By default matched are exact.
+
+    >>> str_match("", "")
+    True
+
+    >>> str_match("1", "1")
+    True
+
+    >>> str_match("1", "2")
+    False
+
+    >>> str_match("a", "a")
+    True
+
+    >>> str_match("a", "A")
+    False
+
+If `case` is disabled, matches are case insensitive.
+
+    >>> str_match("a", "A", {"case": False})
+    True
+
+If `wildcard` is specified, the specified token is used to match any
+output up to the output following the wildcard.
+
+A single wilcard matches everything.
+
+    >>> str_match("...", "Anything here matches", {"wildcard": "..."})
+    True
+
+The wildcard can be any series of characters.
+
+    >>> str_match("?", "Anything here matches", {"wildcard": "?"})
+    True
+
+    >>> str_match("? b ?", "a b c", {"wildcard": "?"})
+    True
+
+Spaces are included in matches.
+
+    >>> str_match("? b ?", "b", {"wildcard": "?"})
+    False
+
+    >>> str_match("? b ?", " b ", {"wildcard": "?"})
+    True
+
+Other wildcard examples.
+
+    >>> str_match("aa...a", "aaa", {"wildcard": "..."})
+    True
+
+    >>> str_match("aa...aa", "aaa", {"wildcard": "..."})
+    False
+
+    >>> str_match(
+    ...     "The ... is blue",
+    ...     "The ball is blue",
+    ...     {"wildcard": "..."}
+    ... )
+    True
+
+The token is consumed from left to right.
+
+    >>> str_match("....", "Hello.", {"wildcard": "..."})
+    True
+
+    >>> str_match("....", ".Hello", {"wildcard": "..."})
+    False
 
 ## Parse matching
 
 Grokville's `parse` option enables parse matching. Parse matching is
-implemented by `groktest._ParseMatcher`.
+implemented by `groktest.parse_match`.
 
-    >>> from groktest import _ParseMatcher
-
-Create a function to test parse matching.
-
-    >>> def parse_match(
-    ...     expected,
-    ...     test_output,
-    ...     types=None,
-    ...     case_sensitive=True,
-    ... ):
-    ...     matcher = _ParseMatcher(types, case_sensitive)
-    ...     match = matcher(expected, test_output)
-    ...     if match:
-    ...         pprint(match.bound_variables)
-    ...     else:
-    ...         print("<no match>")
+    >>> def parse_match(expected, test_output, options=None):
+    ...     from groktest import parse_match as parse_match0
+    ...     m = parse_match0(expected, test_output, options)
+    ...     pprint(m.vars if m.match else None)
 
 Match simple output.
 
@@ -40,7 +110,7 @@ Use format expressions.
     {}
 
     >>> parse_match("{:D}", "1")
-    <no match>
+    None
 
     >>> parse_match("A {} cat", "A blue cat")
     {}
@@ -49,13 +119,13 @@ Use format expressions.
     {}
 
     >>> parse_match("A {} cat", "A red dog")
-    <no match>
+    None
 
     >>> parse_match("A {} cat", "A blue and red cat")
     {}
 
     >>> parse_match("A {:w} cat", "A blue and red cat")
-    <no match>
+    None
 
 Use variables.
 
@@ -73,32 +143,32 @@ Groktest match support can be customized with custom match types.
     >>> parse_match(
     ...     "A {:color} cat",
     ...     "A blue cat",
-    ...     {"color": "blue|red"}
+    ...     {"types": {"color": "blue|red"}}
     ... )
     {}
 
     >>> parse_match(
     ...     "A {color:color} cat",
     ...     "A red cat",
-    ...     {"color": "blue|red"}
+    ...     {"types": {"color": "blue|red"}}
     ... )
     {'color': 'red'}
 
     >>> parse_match(
     ...     "A {:color} cat",
     ...     "A green cat",
-    ...     {"color": "blue|red"}
+    ...     {"types": {"color": "blue|red"}}
     ... )
-    <no match>
+    None
 
 By default matches are case sensitive.
 
     >>> parse_match("Hello", "hello")
-    <no match>
+    None
 
 Compare with case insensitive.
 
-    >>> parse_match("Hello", "hello", case_sensitive=False)
+    >>> parse_match("Hello", "hello", {"case": False})
     {}
 
 Match types can specify a case-insensitive pattern using `(?i)`.
@@ -106,16 +176,14 @@ Match types can specify a case-insensitive pattern using `(?i)`.
     >>> parse_match(
     ...     "A {color:color} cat",
     ...     "A RED cat",
-    ...     {"color": "(?i)blue|red"},
-    ...     case_sensitive=True
+    ...     {"types": {"color": "(?i)blue|red"}}
     ... )
     {'color': 'RED'}
 
     >>> parse_match(
     ...     "A {color:color} cat",
     ...     "A bluE cat",
-    ...     {"color": "(?i)blue|red"},
-    ...     case_sensitive=True
+    ...     {"types": {"color": "(?i)blue|red"}}
     ... )
     {'color': 'bluE'}
 
@@ -140,10 +208,10 @@ Patterns match across multipe lines.
 Non-patterns are sensitive to line-endings.
 
     >>> parse_match("a b", "a\nb")
-    <no match>
+    None
 
     >>> parse_match("a b", "\na b\n")
-    <no match>
+    None
 
 To match the previous example, the leading and trailing line-endings
 need to be stripped.

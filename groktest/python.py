@@ -19,6 +19,7 @@ import traceback
 from .__init__ import Runtime
 from .__init__ import Test
 from .__init__ import TestConfig
+from .__init__ import TestMatch
 from .__init__ import TestResult
 from .__init__ import TestSpec
 
@@ -55,8 +56,9 @@ class PythonRuntime(Runtime):
     def exec_test_expr(self, test: Test):
         return _exec_test_expr(test, _check_proc(self._p))
 
-    def handle_bound_variables(self, bound_variables: Dict[str, Any]):
-        _update_vars(bound_variables, _check_proc(self._p))
+    def handle_test_match(self, match: TestMatch):
+        if match.match and match.vars:
+            _update_vars(match.vars, _check_proc(self._p))
 
     def shutdown(self, timeout: int = 5):
         if self._p:

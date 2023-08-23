@@ -18,7 +18,7 @@ python-init: "msg = 'Hello!'"
 Python tests have access to the standard set of Python builtins.
 
     >>> sorted(__builtins__)
-    ['ArithmeticError', 'AssertionError', {}, 'zip']
+    ['ArithmeticError', 'AssertionError', ..., 'zip']
 
 `__name__` is the test file base name.
 
@@ -27,8 +27,8 @@ Python tests have access to the standard set of Python builtins.
 
 `__file__` is the full path to the test file.
 
-    >>> __file__  # +paths
-    '{}/examples/python-globals.md'
+    >>> __file__
+    '.../examples/python-globals.md'
 
 `pprint` is provided by the Python runtime to print formatted values.
 This provides for consistent value display that wraps appropriately in
@@ -57,19 +57,13 @@ Show project config using `load_project_config`:
     >>> project_config = path.normpath(__file__ + "/../../pyproject.toml")
 
     >>> pprint(load_project_config(project_config))
-    {'__src__': '{}/pyproject.toml',
+    {'__src__': '.../pyproject.toml',
      'exclude': ['docs/yaml.md', 'examples/unknown-format.md'],
      'include': ['README.md', 'docs/*.md', 'examples/*.md'],
      'python-init': 'from groktest import load_project_config\n'
                     'from os import path\n'
                     'import re\n'}
 
-
-    >>> {"foo": 123}
-    {'foo': {foo:d}}
-
-    >>> foo
-    123
 
 `re` is available via project config:
 
@@ -80,6 +74,3 @@ Show project config using `load_project_config`:
 
     >>> print(msg)
     Hello!
-
-
-    >> load_project_config()

@@ -97,12 +97,6 @@ This is equivalent to `<BLANKLINE>` in `doctest`.
 To match a literal pipe char on a single line, use the match type
 `pipe`.
 
-TODO: Not supporting format matching by default
-TODO: Use `-blankline` option to opt out of this deal
-
-    >>> print("|")
-    {:pipe}
-
     >> print("|")  # -blankline
     |
 
