@@ -67,7 +67,7 @@ Various tests:
 
 Stop the runtime.
 
-    >>> python.stop()
+    >>> python.shutdown()
 
 Once shut down, the runtime is no longer available.
 

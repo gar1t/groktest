@@ -41,4 +41,8 @@ exclude = [
   "examples/unknown-format.md"
 ]
 
-options.doctest = "+IGNORE_EXCEPTION_DETAIL +ELLIPSIS +NORMALIZE_WHITESPACE"
+python-init = """
+from groktest import load_project_config
+from os.path import dirname
+import re
+"""

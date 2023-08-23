@@ -2,6 +2,8 @@
 
 from typing import *
 
+from .__init__ import ProjectConfig
+
 import argparse
 import glob
 import json
@@ -10,19 +12,12 @@ import os
 import tempfile
 
 from .__init__ import test_file
-
-from . import _vendor_tomli as toml
+from .__init__ import load_project_config
+from .__init__ import ProjectDecodeError
+from .__init__ import TestTypeNotSupported
 
 # Defer init to `_init_logging()`
 log: logging.Logger = cast(logging.Logger, None)
-
-
-ProjectData = Dict[str, Any]
-
-
-class CmdConfig:
-    def __init__(self, filenames: List[str]):
-        self.filenames = filenames
 
 
 def main():
@@ -33,21 +28,23 @@ def main():
 
     _apply_last(args)
 
-    config = _cmd_config(args)
-
-    _maybe_save_last(args)
+    config = _try_project_config(args)
 
     failed = tested = 0
 
-    for filename in config.filenames:
+    for filename in _test_filenames(config, args):
         if args.preview:
             print(f"Testing {filename} (preview)")
             continue
         print(f"Testing {filename}")
         try:
-            result = test_file(filename)
+            result = test_file(filename, config)
         except FileNotFoundError:
-            print(f"WARNING: {filename} does not exist, skipping")
+            log.warning("%s does not exist, skipping", filename)
+        except IsADirectoryError:
+            log.warning("%s is a directory, skipping", filename)
+        except TestTypeNotSupported as e:
+            log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
         else:
             failed += result["failed"]
             tested += result["tested"]
@@ -62,6 +59,8 @@ def main():
 
 
 def _init_logging(args: Any):
+    from .__init__ import __name__
+
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.WARNING,
         format="%(levelname)s: [%(name)s] %(message)s",
@@ -97,9 +96,9 @@ def _init_parser():
 
 def _apply_last(args: Any):
     if args.last:
-        last = _last_paths()
-        assert last
-        args.paths = last
+        args.paths = _last_paths()
+    else:
+        _save_last_cmd(args)
 
 
 def _last_paths():
@@ -123,74 +122,41 @@ def _last_paths_savefile():
     return os.path.join(tempfile.gettempdir(), "groktest.last")
 
 
-def _maybe_save_last(args: Any):
+def _save_last_cmd(args: Any):
     if not args.last:
         with open(_last_paths_savefile(), "w") as f:
             json.dump(args.paths, f)
 
 
-def _cmd_config(args: Any):
-    return _try_project_config(args) or _default_config(args)
-
-
 def _try_project_config(args: Any):
     if not args.paths:
         return None
-    project_data = _try_project_data(args.paths[0])
-    if not project_data:
-        return None
-    return _cmd_config_for_project_data(project_data, args)
-
-
-def _try_project_data(path: str):
-    candidates = [path, os.path.join(path, "pyproject.toml")]
-    for filename in [path for path in candidates if os.path.isfile(path)]:
+    for path in _project_candidates(args.paths[0]):
+        if not os.path.isfile(path):
+            continue
         try:
-            return _load_toml(filename)
-        except FileNotFoundError:
-            pass
-        except TypeError:
-            pass
+            return load_project_config(path)
+        except ProjectDecodeError as e:
+            log.debug("Error loading project config from %s: %s", path, e)
     return None
 
 
-def _load_toml(filename: str):
-    try:
-        f = open(filename, "rb")
-    except FileNotFoundError:
-        raise
-    with f:
-        try:
-            data = toml.load(f)
-        except toml.TOMLDecodeError as e:
-            raise TypeError from e
-        else:
-            log.debug("using project config in %s", filename)
-            data["__filename__"] = filename
-            return data
+def _project_candidates(path_arg: str):
+    return (path_arg, os.path.join(path_arg, "pyproject.toml"))
 
 
-def _cmd_config_for_project_data(data: Dict[str, Any], any: Any):
+def _test_filenames(config: Optional[ProjectConfig], args: Any):
+    if config is None:
+        return args.paths
     try:
-        groktest_data = data["tool"]["groktest"]
+        include = _coerce_list(config["include"])
     except KeyError:
-        return None
+        src = config["__filename__"]
+        raise SystemExit(f"Missing 'include' in 'tool.groktest' section in {src}")
     else:
-        return _config_for_groktest_data(groktest_data, data["__filename__"])
-
-
-def _config_for_groktest_data(data: Dict[str, Any], config_filename: str):
-    try:
-        include = _coerce_list(data["include"])
-    except KeyError:
-        raise SystemExit(
-            f"Missing 'include' in 'tool.groktest' section in {config_filename}"
+        return _filenames_for_test_patterns(
+            include, _coerce_list(config.get("exclude"))
         )
-    else:
-        filenames = _filenames_for_test_patterns(
-            include, _coerce_list(data.get("exclude"))
-        )
-        return CmdConfig(filenames)
 
 
 def _coerce_list(val: Any) -> List[Any]:
@@ -214,10 +180,6 @@ def _apply_test_patterns(patterns: List[str], desc: str):
         log.debug("tests for {desc} pattern '%s': %s", pattern, matches)
         filenames.extend(matches)
     return filenames
-
-
-def _default_config(args: Any):
-    return CmdConfig(args.paths)
 
 
 if __name__ == "__main__":

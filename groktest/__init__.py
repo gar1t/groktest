@@ -8,27 +8,33 @@ import configparser
 import importlib
 import json
 import logging
+import os
 import re
 
 from . import _vendor_parse as parselib
+from . import _vendor_tomli as toml
 
 __all__ = [
-    "TestSpec",
-    "TEST_SPECS",
     "DEFAULT_SPEC",
+    "Error",
     "init_runner_state",
     "init_runtime",
     "match_test_output",
     "MatchTypes",
     "parse_tests",
+    "ProjectDecodeError",
     "PYTHON_SPEC",
     "RunnerState",
     "Runtime",
     "RUNTIME",
+    "RuntimeNotSupported",
     "test_file",
+    "SPECS",
     "Test",
     "TestMatch",
     "TestResult",
+    "TestSpec",
+    "TestTypeNotSupported",
 ]
 
 log = logging.getLogger("groktest")
@@ -46,7 +52,8 @@ class RuntimeNotSupported(Error):
     pass
 
 
-MatchTypes = Dict[str, str]
+class ProjectDecodeError(Error):
+    pass
 
 
 class TestSpec:
@@ -69,6 +76,7 @@ class TestSpec:
             re.MULTILINE | re.VERBOSE,
         )
         self.blankline = blankline
+
 
 TestOptions = Dict[str, Any]
 
@@ -95,7 +103,7 @@ class TestMatch:
 
 
 class Runtime:
-    def start(self) -> None:
+    def init(self, config: Optional[TestConfig] = None) -> None:
         raise NotImplementedError()
 
     def exec_test_expr(self, test: Test) -> TestResult:
@@ -104,7 +112,7 @@ class Runtime:
     def handle_bound_variables(self, bound_variables: Dict[str, Any]) -> None:
         raise NotImplementedError()
 
-    def stop(self, timeout: int = 0) -> None:
+    def shutdown(self, timeout: int = 0) -> None:
         raise NotImplementedError()
 
     def is_available(self) -> bool:
@@ -112,26 +120,41 @@ class Runtime:
 
 
 class RuntimeScope:
-    def __init__(self, runtime: Runtime, stop_timeout: Optional[int] = None):
+    def __init__(self, runtime: Runtime, shutdown_timeout: Optional[int] = None):
         self.runtime = runtime
-        self.stop_timeout = stop_timeout
+        self.shutdown_timeout = shutdown_timeout
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc: Any):
-        if self.stop_timeout is not None:
-            self.runtime.stop(self.stop_timeout)
+        if self.shutdown_timeout is not None:
+            self.runtime.shutdown(self.shutdown_timeout)
         else:
-            self.runtime.stop()
+            self.runtime.shutdown()
 
 
 class RunnerState:
-    def __init__(self, spec: TestSpec, runtime: Runtime, tests: List[Test]):
-        self.spec = spec
-        self.runtime = runtime
+    def __init__(
+        self,
+        tests: List[Test],
+        runtime: Runtime,
+        spec: TestSpec,
+        config: TestConfig,
+        filename: str,
+    ):
         self.tests = tests
+        self.runtime = runtime
+        self.spec = spec
+        self.filename = filename
+        self.config = config
         self.results: Dict[str, Any] = {"failed": 0, "tested": 0}
+
+
+class DocTestRunnerState:
+    def __init__(self, filename: str, config: TestConfig):
+        self.filename = filename
+        self.config = config
 
 
 DEFAULT_TEST_PATTERN = r"""
@@ -161,18 +184,42 @@ PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     blankline="|",
 )
 
-TEST_SPECS: Dict[str, TestSpec] = {"python": PYTHON_SPEC}
+Marker = Any
 
-RUNTIME = {"python": "groktest.python.PythonRuntime"}
+DOCTEST_MARKER: Marker = object()
+
+SPECS: Dict[str, Union[TestSpec, Marker]] = {
+    "python": PYTHON_SPEC,
+    "doctest": DOCTEST_MARKER,
+}
+
+RUNTIME = {
+    "doctest": "groktest.doctest.DoctestRuntime",
+    "python": "groktest.python.PythonRuntime",
+}
+
+ProjectConfig = Dict[str, Any]
+
+FrontMatter = Dict[str, Any]
+
+TestConfig = Dict[str, Any]
+
+TestOptions = Dict[str, Any]
+
+MatchTypes = Dict[str, str]
 
 
-def init_runner_state(filename: str):
+def init_runner_state(filename: str, project_config: Optional[ProjectConfig] = None):
+    filename = os.path.abspath(filename)
     contents = _read_file(filename)
     fm = _parse_front_matter(contents, filename)
     spec = _spec_for_front_matter(fm, filename)
-    runtime = init_runtime(spec.runtime)
+    test_config = _test_config(fm, project_config, filename)
+    if spec is DOCTEST_MARKER:
+        return DocTestRunnerState(filename, test_config)
+    runtime = init_runtime(spec.runtime, test_config)
     tests = parse_tests(contents, spec, filename)
-    return RunnerState(spec, runtime, tests)
+    return RunnerState(tests, runtime, spec, test_config, filename)
 
 
 def _read_file(filename: str):
@@ -182,7 +229,7 @@ def _read_file(filename: str):
 _FRONT_MATTER_P = re.compile(r"\s*^---\n(.*)\n---\n?$", re.MULTILINE | re.DOTALL)
 
 
-def _parse_front_matter(s: str, filename: str) -> Any:
+def _parse_front_matter(s: str, filename: str) -> FrontMatter:
     """Parse front matter from string.
 
     Front matter can be defined using YAML, JSON, or INI.
@@ -202,8 +249,13 @@ def _parse_front_matter(s: str, filename: str) -> Any:
         or _try_parse_json(fm, filename)
         or _try_parse_toml(fm, filename)
         or _try_parse_simplified_yaml(fm, filename)
-        or {}
+        or _empty_front_matter(filename)
     )
+
+
+def _empty_front_matter(filename: str):
+    log.debug("Missing or unparseable front matter for %s", filename)
+    return cast(FrontMatter, {})
 
 
 def _try_parse_full_yaml(s: str, filename: str, raise_error: bool = False):
@@ -215,36 +267,43 @@ def _try_parse_full_yaml(s: str, filename: str, raise_error: bool = False):
         log.debug("yaml module not available, skipping full YAML for %s", filename)
         return None
     try:
-        return yaml.safe_load(s)
+        data = yaml.safe_load(s)
     except Exception as e:
         if raise_error:
             raise
-        log.debug("ERROR parsing YAML for %s: %s", filename, e)
+        log.debug("ERROR parsing YAML front matter for %s: %s", filename, e)
         return None
+    else:
+        log.debug("Parsed YAML front matter  for %s: %r", filename, data)
+        return cast(FrontMatter, data)
 
 
 def _try_parse_json(s: str, filename: str, raise_error: bool = False):
     try:
-        return json.loads(s)
+        data = json.loads(s)
     except Exception as e:
         if raise_error:
             raise
         log.debug("ERROR parsing JSON for %s: %s", filename, e)
         return None
+    else:
+        log.debug("Parsed JSON for %s: %r", filename, data)
+        return cast(FrontMatter, data)
 
 
 def _try_parse_toml(
     s: str, filename: str, raise_error: bool = False
 ) -> Optional[Dict[str, Any]]:
-    from . import _vendor_tomli as toml
-
     try:
-        return toml.loads(s)
+        data = toml.loads(s)
     except toml.TOMLDecodeError as e:
         if raise_error:
             raise
-        log.debug("ERROR parsing TOML for %s: %s", filename, e)
+        log.debug("ERROR parsing TOML front matter for %s: %s", filename, e)
         return None
+    else:
+        log.debug("Parsed TOML front matter for %s: %r", filename, data)
+        return cast(FrontMatter, data)
 
 
 def _try_parse_simplified_yaml(
@@ -256,16 +315,22 @@ def _try_parse_simplified_yaml(
     except configparser.Error as e:
         if raise_error:
             raise
-        log.debug("ERROR parsing INI for %s: %s", filename, e)
+        log.debug("ERROR parsing simplified YAML for %s: %s", filename, e)
         return None
     else:
-        parsed = {
-            section: dict(
-                {key: _simplified_yaml_val(val) for key, val in parser[section].items()}
-            )
-            for section in parser
-        }
-        return parsed.get("__anonymous__", {})
+        data = _simplified_yaml_for_ini(parser)
+        log.debug("Parsed simplified YAML front matter for %s: %r", filename, data)
+        return cast(FrontMatter, data)
+
+
+def _simplified_yaml_for_ini(parser: configparser.ConfigParser):
+    parsed = {
+        section: dict(
+            {key: _simplified_yaml_val(val) for key, val in parser[section].items()}
+        )
+        for section in parser
+    }
+    return parsed.get("__anonymous__", {})
 
 
 def _simplified_yaml_val(s: str):
@@ -311,7 +376,7 @@ def _spec_for_test_type(fm: Dict[str, Any], filename: str):
     if not test_type:
         return None
     try:
-        return TEST_SPECS[test_type]
+        return SPECS[test_type]
     except KeyError:
         raise TestTypeNotSupported(test_type) from None
 
@@ -419,7 +484,39 @@ def _check_test_indent(lines: List[str], indent: int, linepos: int, filename: st
             )
 
 
-def init_runtime(name: str):
+def _test_config(
+    test_fm: FrontMatter,
+    project_config: Optional[ProjectConfig],
+    filename: str,
+):
+    project_config = project_config or _try_test_file_project_config(filename) or {}
+    return {**project_config, **test_fm}
+
+
+def _try_test_file_project_config(filename: str):
+    for dirname in _iter_parents(filename):
+        filename = os.path.join(dirname, "pyproject.toml")
+        try:
+            return load_project_config(filename)
+        except FileNotFoundError:
+            pass
+        except ProjectDecodeError as e:
+            log.warning("Error loading project config from %s: %s", filename, e)
+            break
+    return None
+
+
+def _iter_parents(path: str):
+    parent = last = os.path.dirname(path)
+    while True:
+        yield parent
+        parent = os.path.dirname(parent)
+        if parent == last:
+            break
+        last = parent
+
+
+def init_runtime(name: str, config: Optional[TestConfig] = None):
     try:
         import_spec = RUNTIME[name]
     except KeyError:
@@ -430,16 +527,15 @@ def init_runtime(name: str):
         modname, classname = import_spec.rsplit(".", 1)
         mod = importlib.import_module(modname)
         rt = cast(Runtime, getattr(mod, classname)())
-        rt.start()
+        rt.init(config)
         return rt
 
 
-def test_file(filename: str):
-    result = _maybe_doctest(filename)
-    if result is not None:
-        return result
-
-    state = init_runner_state(filename)
+def test_file(filename: str, config: Optional[ProjectConfig] = None):
+    state = init_runner_state(filename, config)
+    if isinstance(state, DocTestRunnerState):
+        return _doctest_file(state.filename, state.config)
+    assert isinstance(state, RunnerState)
     with RuntimeScope(state.runtime):
         for test in state.tests:
             result = state.runtime.exec_test_expr(test)
@@ -617,27 +713,19 @@ def _strip_trailing_lf(s: str):
     return s[:-1] if s[-1:] == "\n" else s
 
 
-def _maybe_doctest(filename: str):
-    contents = _read_file(filename)
-    fm = _parse_front_matter(contents, filename)
-    if fm.get("test-type") == "doctest":
-        failed, tested = _doctest_file(filename, fm)
-        return {"failed": failed, "tested": tested}
-    return None
-
-
-def _doctest_file(filename: str, config: Any):
+def _doctest_file(filename: str, config: TestConfig):
     import doctest
 
-    return doctest.testfile(
+    failed, tested = doctest.testfile(
         filename,
         module_relative=False,
         optionflags=_doctest_options(config),
         extraglobs=_doctest_globals(config),
     )
+    return {"failed": failed, "tested": tested}
 
 
-def _doctest_options(config: Any):
+def _doctest_options(config: TestConfig):
     opts = config.get("test-options")
     if not opts:
         return 0
@@ -674,3 +762,38 @@ def _doctest_globals(config: Any):
     return {
         "pprint": pprint,
     }
+
+
+def load_project_config(filename: str):
+    try:
+        data = _load_toml(filename)
+    except toml.TOMLDecodeError as e:
+        raise ProjectDecodeError(e) from None
+    else:
+        return _project_config_for_data(data) if data else None
+
+
+def _load_toml(filename: str):
+    try:
+        f = open(filename, "rb")
+    except FileNotFoundError:
+        raise
+    with f:
+        try:
+            data = toml.load(f)
+        except toml.TOMLDecodeError:
+            raise
+        else:
+            log.debug("using project config in %s", filename)
+            data["__filename__"] = filename
+            return data
+
+
+def _project_config_for_data(data: Dict[str, Any]):
+    try:
+        groktest_data = data["tool"]["groktest"]
+    except KeyError:
+        return None
+    else:
+        groktest_data["__filename__"] = data["__filename__"]
+        return cast(ProjectConfig, groktest_data)

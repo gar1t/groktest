@@ -1,10 +1,7 @@
 # Groktest To Do
 
-## Error support
-
-- How do we deal with exception detail? Arguably this should be ignored
-  by default with an option to not ignore. How does this work in
-  doctest?
+- Str matcher
+- Test options - mainly interested in wildcard and whitespace
 
 ## Think about the `assert` pattern
 
@@ -152,13 +149,18 @@ Needed options:
   The wildcard can be configured for all tests in a test file using the
   file front matter.
 
-- `whitespace`
+- `whitespace`, `ws`
 
   Consider whitespace when comparing expected and test output. Enabled
   by default.
 
   To disregard whitespace in matches, disable the option using
   `-whitespace`.
+
+- `paths`
+
+  Normalize paths to be `/` or `\`. Defaults to disabled and `/` if
+  enabled without an explicit value.
 
 ## Globals config
 

@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "problemMatcher": {
     "owner": "groktest",
-    "fileLocation": "relative",
+    "fileLocation": "absolute",
     "pattern": [
       {
         "regexp": "^File \"(.*)\", line (\\d+)",
@@ -32,7 +32,7 @@
       "args": ["-m", "groktest", "${relativeFile}"]
     },
     {
-      "label": "Groktest: Run Selected",
+      "label": "Groktest: Run Test",
       "type": "process",
       "command": "${command:python.interpreterPath}",
       "args": ["-m", "groktest", "${workspaceFolder}/${input:test}"]
