@@ -58,13 +58,16 @@
       "description": "Project test",
       "options": [
         "README.md",
-        "docs/api.md",
-        "docs/implementation.md",
+        "docs/front-matter.md",
+        "docs/matching.md",
+        "docs/options.md",
         "docs/python.md",
         "docs/runner.md",
         "docs/yaml.md",
-        "examples/doctest.md",
+        "examples/assert.md",
         "examples/defaults.md",
+        "examples/doctest.md",
+        "examples/python-globals.md",
         "examples/unkown-format.md"
       ]
     }

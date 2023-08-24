@@ -94,13 +94,30 @@ This is equivalent to `<BLANKLINE>` in `doctest`.
     bar
     |
 
-To match a literal pipe char on a single line, use the match type
-`pipe`.
+Blank lines can be disabled using the `blankline` option.
 
     >> print("|")  # -blankline
     |
+
+The token used to represent blank lines in outout can be modified when
+enabling the `blankline` option.
 
     >> print("|\n\n|")  # +blankline=<BLANKLINE>
     |
     <BLANKLINE>
     |
+
+## Wildcard matching
+
+Wildcard matching is not enabled by default.
+
+    >> "The sun is strong"  # +fails
+    'The ... is strong'
+
+Enable it using the `wilcard` option.
+
+    >> "The moon hovers"  # +wildcard
+    'The ... hovers'
+
+    >> "The moon hovers"  # +wildcard=*
+    'The * hovers'

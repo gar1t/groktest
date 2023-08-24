@@ -1,5 +1,6 @@
 ---
-test-options: +wildcard
+[tool.groktest]
+options = "+wildcard"
 ---
 
 # Using `assert` in tests

@@ -95,12 +95,18 @@ TestMatcher = Callable[[str, str, Optional[TestOptions]], TestMatch]
 
 class Test:
     def __init__(
-        self, expr: str, expected: str, filename: str, line: int, options: TestOptions
+        self,
+        expr: str,
+        expected: str,
+        filename: str,
+        line: int,
+        options: TestOptions,
     ):
         self.expr = expr
         self.expected = expected
         self.filename = filename
         self.line = line
+        self.options = options
 
 
 class TestResult:
@@ -165,23 +171,41 @@ class DocTestRunnerState:
 
 
 DEFAULT_TEST_PATTERN = r"""
-    # Credit: Tim Peters, et al. Python doctest.py
-    # Test expression: PS1 line followed by zero or more PS2 lines
-    (?P<expr>
-        (?:^(?P<indent> [ ]*) {ps1} .*)   # PS1 line
-        (?:\n           [ ]*  {ps2} .*)*  # PS2 lines
-    )
-    \n?
-    # Expected result: any non-blank lines that don't start with PS1
-    (?P<expected>
-        (?:
-        (?![ ]*$)      # Not a blank line
-        (?![ ]*{ps1})  # Not a line starting with PS1
-        .+$\n?         # But any other line
-        )*
-    )
+# Credit: Tim Peters, et al. Python doctest.py
+# Test expression: PS1 line followed by zero or more PS2 lines
+(?P<expr>
+    (?:^(?P<indent> [ ]*) {ps1} .*)   # PS1 line
+    (?:\n           [ ]*  {ps2} .*)*  # PS2 lines
+)
+\n?
+# Expected result: any non-blank lines that don't start with PS1
+(?P<expected>
+    (?:
+    (?![ ]*$)      # Not a blank line
+    (?![ ]*{ps1})  # Not a line starting with PS1
+    .+$\n?         # But any other line
+    )*
+)
 """
 
+OPTIONS_PATTERN = re.compile(
+    r"""
+[+]([\w\-]+)
+    (?:\s*=\s*
+        ((?:'.*?') | (?:\".*?\") | (?:[^ $]+))
+    )?
+| [-]([\w\-]+)
+"""
+)
+
+# OPTIONS_PATTERN = re.compile(
+#     r"""
+# (?:[+]([\w\-]+)(?:\s*=\s*((?:'.*?')|(?:\".*?\")|(?:[^ $]+)))?)
+# |[-]([\w\-]+)
+#     """
+# )
+
+OPTIONS_PATTERN = re.compile(r"[+]([\w\-]+)(?:\s*=\s*((?:'.*?')|(?:\".*?\")|(?:[^ $]+)))?|[-]([\w\-]+)")
 
 PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     runtime="python",
@@ -610,7 +634,7 @@ def test_file(filename: str, config: Optional[ProjectConfig] = None):
 def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
     expected = _format_match_expected(test, state.spec)
     test_output = _format_match_test_output(result, test, state.spec)
-    match = match_test_output(expected, test_output, test, state.spec)
+    match = match_test_output(expected, test_output, test, state.config, state.spec)
     _log_test_result_match(match, result, test, expected, test_output, state)
     if match.match:
         _handle_test_passed(test, match, state)
@@ -641,9 +665,57 @@ def _truncate_empty_line_spaces(s: str):
     return re.sub(r"(?m)^[^\S\n]+$", "", s)
 
 
-def match_test_output(expected: str, test_output: str, test: Test, spec: TestSpec):
-    options = cast(TestOptions, {})
+def match_test_output(
+    expected: str,
+    test_output: str,
+    test: Test,
+    config: TestConfig,
+    spec: TestSpec,
+):
+    options = _test_options(test, config, spec)
     return matcher(options)(expected, test_output, options)
+
+
+def _test_options(test: Test, config: TestConfig, spec: TestSpec):
+    options = {
+        **_parse_config_options(config, test.filename),
+        **test.options,
+    }
+    _maybe_apply_spec_wildcard(spec, options)
+    return cast(TestOptions, options)
+
+
+def _parse_config_options(config: TestConfig, filename: str):
+    parsed: TestOptions = {}
+    options = config.get("options")
+    if not options:
+        return parsed
+    for part in _coerce_list(options):
+        if not isinstance(part, str):
+            log.warning("Invalid option %r in %s: expected string", part, filename)
+            continue
+        for m in OPTIONS_PATTERN.finditer(part):
+            _apply_option_match(m, parsed)
+    return parsed
+
+
+def _apply_option_match(m: Match[str], options: TestOptions):
+    plus_name, plus_val, neg_name = m.groups()
+    if neg_name:
+        assert plus_name is None and plus_val is None, m
+        options[neg_name] = False
+    else:
+        assert neg_name is None, m
+        options[plus_name] = True if plus_val is None else _parse_option_val(plus_val)
+
+
+def _parse_option_val(s: str):
+    return _simplified_yaml_val(s)
+
+
+def _maybe_apply_spec_wildcard(spec: TestSpec, options: TestOptions):
+    if options.get("wildcard") is True:
+        options["wildcard"] = spec.wildcard
 
 
 def matcher(options: TestOptions) -> TestMatcher:
@@ -702,14 +774,28 @@ def str_match(
     options: Optional[TestOptions] = None,
 ):
     options = options or {}
-    case_sensitive = _opt_value("case", options, True)
-    if not case_sensitive:
-        expected = expected.lower()
-        test_output = test_output.lower()
+    expected, test_output = _apply_transform_options(expected, test_output, options)
     wildcard = options.get("wildcard")
     if wildcard:
         return _wildcard_match(expected, test_output, wildcard, options)
     return _default_str_match(expected, test_output, options)
+
+
+def _apply_transform_options(expected: str, test_output: str, options: TestOptions):
+    for f in [_apply_case_option, _apply_whitespace_option]:
+        expected, test_output = f(expected, test_output, options)
+    return expected, test_output
+
+
+def _apply_case_option(expected: str, test_output: str, options: TestOptions):
+    if _opt_value("case", options, True):
+        return expected, test_output
+    return expected.lower(), test_output.lower()
+
+
+def _apply_whitespace_option(expected: str, test_output: str, options: TestOptions):
+    # TODO
+    return expected, test_output
 
 
 def _wildcard_match(
