@@ -1,8 +1,9 @@
 ---
-[tool.groktest]
+test-options = "+parse"
 
-options = "+parse"
-types.cat_or_dog = "cat|dog"
+[parse-types]
+cat_or_dog = "cat|dog"
+mm = "\\d+ mm"
 ---
 
 # Parse types
@@ -36,3 +37,16 @@ reason for the error.
 
     >>> 'A sparrow'  # +fails
     'A {:bird}'
+
+Another type, which matches `N mm`:
+
+    >>> 'The width should be 22 mm'
+    'The width should be {:mm}'
+
+The patter can be used to bind matched output to a variable.
+
+    >>> 'The width should be 45 mm'
+    'The width should be {width:mm}'
+
+    >>> width
+    '45 mm'

@@ -119,7 +119,7 @@ Simple YAML:
     ... bar: hello
     ... ---
     ... """)
-    {'bar': 'hello', 'foo': 123}
+    {'__src__': '<test>', 'bar': 'hello', 'foo': 123}
 
 JSON:
 
@@ -131,7 +131,7 @@ JSON:
     ... }
     ... ---
     ... """)
-    {'bar': 'hello', 'foo': 123}
+    {'__src__': '<test>', 'bar': 'hello', 'foo': 123}
 
 TOML:
 
@@ -141,7 +141,7 @@ TOML:
     ... bar = hello
     ... ---
     ... """)
-    {'bar': 'hello', 'foo': 123}
+    {'__src__': '<test>', 'bar': 'hello', 'foo': 123}
 
 ## Simplified YAML
 
@@ -297,7 +297,10 @@ The mapping of simplified front matter to config is described by
     >>> from groktest import FRONT_MATTER_TO_CONFIG
 
     >>> pprint(FRONT_MATTER_TO_CONFIG)
-    {'python-init': ['python', 'init'], 'test-options': ['options']}
+    {'parse-type-functions': ['type-functions'],
+     'parse-types': ['types'],
+     'python-init': ['python', 'init'],
+     'test-options': ['options']}
 
 Front matter is converted to config using `front_matter_to_config`.
 

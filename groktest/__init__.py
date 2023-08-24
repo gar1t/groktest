@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from typing import *
+from types import ModuleType
 
 import configparser
 import copy
 import importlib
+import inspect
 import io
 import json
 import logging
@@ -23,6 +25,8 @@ __all__ = [
     "init_runner_state",
     "match_test_output",
     "parse_tests",
+    "ParseTypeFunction",
+    "ParseTypeFunctions",
     "ParseTypes",
     "ProjectDecodeError",
     "PYTHON_SPEC",
@@ -69,6 +73,10 @@ TestConfig = Dict[str, Any]
 TestOptions = Dict[str, Any]
 
 ParseTypes = Dict[str, str]
+
+ParseTypeFunction = Callable[[str], Any]
+
+ParseTypeFunctions = Dict[str, ParseTypeFunction]
 
 
 class TestSpec:
@@ -294,13 +302,15 @@ def _parse_front_matter(s: str, filename: str) -> FrontMatter:
     if not m:
         return {}
     fm = m.group(1)
-    return (
+    data = (
         _try_parse_full_yaml(fm, filename)
         or _try_parse_json(fm, filename)
         or _try_parse_toml(fm, filename)
         or _try_parse_simplified_yaml(fm, filename)
         or _empty_front_matter(filename)
     )
+    data["__src__"] = filename
+    return data
 
 
 def _empty_front_matter(filename: str):
@@ -545,13 +555,16 @@ def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> Test
     }
     # Selectively merge/append test config back into result
     _merge_replace(["options"], test_config, merged)
-    _merge_append(["python", "init"], test_config, merged)
+    _merge_append_list(["python", "init"], test_config, merged)
+    _merge_append_list(["__src__"], test_config, merged)
     return merged
 
 
 FRONT_MATTER_TO_CONFIG = {
-    "test-options": ["options"],
+    "parse-types": ["types"],
+    "parse-type-functions": ["type-functions"],
     "python-init": ["python", "init"],
+    "test-options": ["options"],
 }
 
 
@@ -606,7 +619,7 @@ def _merge_kv_dest(
     return path[-1], val, cur_dest
 
 
-def _merge_append(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
+def _merge_append_list(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
     key, src_val, append_dest = _merge_kv_dest(path, src, dest)
     if not key:
         return
@@ -884,7 +897,99 @@ def _option_value(name: str, options: Dict[str, Any], default: Any):
         return default if val is None else val
 
 
-def _parselib_types(config: TestConfig) -> Dict[str, Callable[[str], Any]]:
+def _parselib_types(config: TestConfig) -> ParseTypeFunctions:
+    return {
+        **_parselib_module_types(config),
+        **_parselib_regex_types(config),
+    }
+
+
+def _parselib_module_types(config: TestConfig) -> ParseTypeFunctions:
+    functions_spec = config.get("type-functions")
+    if not functions_spec:
+        return {}
+    functions_spec = _coerce_list(functions_spec)
+    path = _config_src_path(config)
+    return dict(_iter_parse_functions(functions_spec, path))
+
+
+def _config_src_path(config: TestConfig):
+    config_src: List[str] = _coerce_list(config["__src__"])
+    return [os.path.dirname(path) for path in config_src]
+
+
+def _iter_parse_functions(
+    specs: List[Any],
+    path: List[str],
+) -> Generator[Tuple[str, ParseTypeFunction], None, None]:
+    for spec in specs:
+        module = _try_load_module(spec, path)
+        if not module:
+            continue
+        for f in _iter_module_parse_functions(module):
+            yield _parse_type_name(f), f
+
+
+def _try_load_module(spec: str, path: List[str]):
+    if not isinstance(spec, str):
+        log.warning("Invalid value for type-functions %r, expected a string", spec)
+        return None
+    try:
+        return _load_module(spec, path)
+    except Exception as e:
+        if log.getEffectiveLevel() <= logging.DEBUG:
+            log.exception("Loading module %r", spec)
+        else:
+            log.warning("Error loading parse functions from %r: %e", spec, e)
+        return None
+
+
+def _parse_type_name(f: Callable[[str], Any]):
+    try:
+        return getattr(f, "type_name")
+    except AttributeError:
+        name = f.__name__
+        assert name.startswith("parse_")
+        return name[6:]
+
+
+def _load_module(spec: str, path: List[str]) -> ModuleType:
+    # Intentionally using deprecated API for loading module as it's
+    # incredibly straight forward relative to the suggested method
+    # https://docs.python.org/library/importlib#approximating-importlib-import-module
+    loader = importlib.find_loader(spec, path)  # type: ignore
+    if not loader:
+        raise ModuleNotFoundError(spec)
+    return loader.load_module()  # type: ignore
+
+
+def _iter_module_parse_functions(
+    module: ModuleType,
+) -> Generator[ParseTypeFunction, None, None]:
+    for name in _module_parse_names(module):
+        maybe_parse = getattr(module, name)
+        if _is_parse_function(maybe_parse):
+            yield maybe_parse
+
+
+def _module_parse_names(module: ModuleType):
+    all = getattr(module, "__all__", [])
+    if isinstance(all, str):
+        all = all.split()
+    return [name for name in (all or dir(module)) if name.startswith("parse_")]
+
+
+def _is_parse_function(x: Any):
+    # Simple sniff test for callable with at least one arg
+    try:
+        sig = inspect.signature(x)
+    except TypeError:
+        return False
+    else:
+        return len(sig.parameters) == 1
+
+
+def _parselib_regex_types(config: TestConfig) -> ParseTypeFunctions:
     types: Optional[ParseTypes] = config.get("types")
     if not types:
         return {}
