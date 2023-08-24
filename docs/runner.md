@@ -33,8 +33,8 @@ Runner state consists of the following:
     >>> state.tests
     [<groktest.Test object at ...>, ...]
 
-    >>> state.results
-    {'failed': 0, 'tested': 0}
+    >>> pprint(state.results)
+    {'failed': 0, 'skipped': 0, 'tested': 0}
 
 The runtime available from the state is available.
 

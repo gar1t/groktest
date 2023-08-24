@@ -1,11 +1,7 @@
 # Groktest To Do
 
-- Str matcher
-  - Wildcard
-  - Ignore exception detail by default
-
-- Test options - mainly interested in wildcard and whitespace
-- Better handling of exception detail (auto ignore)
+- Ignore exception detail by default and the `???` option to disable
+  that
 
 ## Test options
 
@@ -152,6 +148,8 @@ Needed options:
 
   Normalize paths to be `/` or `\`. Defaults to disabled and `/` if
   enabled without an explicit value.
+
+- ``
 
 ### Implementation notes
 

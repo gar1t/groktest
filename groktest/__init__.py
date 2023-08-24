@@ -6,10 +6,12 @@ from typing import *
 
 import configparser
 import importlib
+import io
 import json
 import logging
 import os
 import re
+import tokenize
 
 from . import _vendor_parse as parselib
 from . import _vendor_tomli as toml
@@ -66,6 +68,7 @@ class TestSpec:
         test_pattern: str,
         blankline: str,
         wildcard: str,
+        option_candidates: Union[None, str, Callable[[str], Iterator[str]]],
     ):
         self.runtime = runtime
         self.ps1 = ps1
@@ -79,6 +82,7 @@ class TestSpec:
         )
         self.blankline = blankline
         self.wildcard = wildcard
+        self.option_candidates = option_candidates
 
 
 TestOptions = Dict[str, Any]
@@ -161,7 +165,7 @@ class RunnerState:
         self.spec = spec
         self.filename = filename
         self.config = config
-        self.results: Dict[str, Any] = {"failed": 0, "tested": 0}
+        self.results: Dict[str, Any] = {"failed": 0, "tested": 0, "skipped": 0}
 
 
 class DocTestRunnerState:
@@ -189,23 +193,17 @@ DEFAULT_TEST_PATTERN = r"""
 """
 
 OPTIONS_PATTERN = re.compile(
-    r"""
-[+]([\w\-]+)
-    (?:\s*=\s*
-        ((?:'.*?') | (?:\".*?\") | (?:[^ $]+))
-    )?
-| [-]([\w\-]+)
-"""
+    r"[+]([\w\-]+)(?:\s*=\s*((?:'.*?')|(?:\".*?\")|(?:[^ $]+)))?|[-]([\w\-]+)"
 )
 
-# OPTIONS_PATTERN = re.compile(
-#     r"""
-# (?:[+]([\w\-]+)(?:\s*=\s*((?:'.*?')|(?:\".*?\")|(?:[^ $]+)))?)
-# |[-]([\w\-]+)
-#     """
-# )
 
-OPTIONS_PATTERN = re.compile(r"[+]([\w\-]+)(?:\s*=\s*((?:'.*?')|(?:\".*?\")|(?:[^ $]+)))?|[-]([\w\-]+)")
+def _python_comments(s: str):
+    file = io.StringIO(s)
+    for token in tokenize.generate_tokens(file.readline):
+        type, val = token[:2]
+        if type == tokenize.COMMENT:
+            yield val
+
 
 PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     runtime="python",
@@ -214,6 +212,7 @@ PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     test_pattern=DEFAULT_TEST_PATTERN,
     blankline="|",
     wildcard="...",
+    option_candidates=_python_comments,
 )
 
 Marker = Any
@@ -390,7 +389,6 @@ def _spec_for_front_matter(fm: Any, filename: str):
     return (
         _default_spec_for_missing_or_invalid_front_matter(fm, filename)
         or _spec_for_test_type(fm, filename)
-        or _explicit_spec(fm, filename)
         or DEFAULT_SPEC
     )
 
@@ -420,32 +418,6 @@ def _spec_for_test_type(fm: Dict[str, Any], filename: str):
         raise TestTypeNotSupported(test_type) from None
 
 
-def _explicit_spec(fm: Any, filename: str):
-    assert isinstance(fm, dict)
-    spec = fm.get("test-spec")
-    if not spec:
-        return None
-    if not isinstance(fm, dict):
-        log.warning("Invalid 'test-spec' in %s: expected map", filename)
-        return None
-    try:
-        return TestSpec(
-            runtime=fm["runtime"],
-            ps1=fm["ps1"],
-            ps2=fm["ps2"],
-            test_pattern=fm["test-pattern"],
-            blankline=fm["blankline"],
-            wildcard=fm["wildcard"],
-        )
-    except KeyError as e:
-        log.warning(
-            "Missing required attribute '%s', for 'test-spec' in %s",
-            e.args[0],
-            filename,
-        )
-        return None
-
-
 def parse_tests(content: str, spec: TestSpec, filename: str):
     tests = []
     charpos = linepos = 0
@@ -459,8 +431,9 @@ def parse_tests(content: str, spec: TestSpec, filename: str):
 
 def _test_for_match(m: Match[str], spec: TestSpec, linepos: int, filename: str):
     expr = _format_expr(m, spec, linepos, filename)
+    options = _parse_test_options(expr, spec)
     expected = _format_expected(m, linepos, filename)
-    return Test(expr, expected, filename, linepos + 1, {})
+    return Test(expr, expected, filename, linepos + 1, options)
 
 
 def _format_expr(m: Match[str], spec: TestSpec, linepos: int, filename: str):
@@ -489,6 +462,21 @@ def _strip_prompt(s: str, prompt: str, linepos: int, filename: str):
             "space missing after prompt"
         )
     return s[prompt_len + 1 :]
+
+
+def _parse_test_options(expr: str, spec: TestSpec):
+    options: Dict[str, Any] = {}
+    for part in _test_option_candidates(expr, spec):
+        options.update(_decode_options(part))
+    return options
+
+
+def _test_option_candidates(s: str, spec: TestSpec) -> Sequence[str]:
+    if not spec.option_candidates:
+        return []
+    if callable(spec.option_candidates):
+        return list(spec.option_candidates(s))
+    return [m.group(1) for m in re.finditer(spec.option_candidates, s)]
 
 
 def _format_expected(m: Match[str], linepos: int, filename: str):
@@ -626,25 +614,70 @@ def test_file(filename: str, config: Optional[ProjectConfig] = None):
     assert isinstance(state, RunnerState)
     with RuntimeScope(state.runtime):
         for test in state.tests:
-            result = state.runtime.exec_test_expr(test)
-            _handle_test_result(result, test, state)
+            options = _test_options(test, state.config, state.spec)
+            if options.get("skip"):
+                _handle_test_skipped(test, state)
+            else:
+                result = state.runtime.exec_test_expr(test)
+                _handle_test_result(result, test, options, state)
         return state.results
 
 
-def _handle_test_result(result: TestResult, test: Test, state: RunnerState):
-    expected = _format_match_expected(test, state.spec)
+def _handle_test_skipped(test: Test, state: RunnerState):
+    state.results["skipped"] += 1
+
+
+def _handle_test_result(
+    result: TestResult, test: Test, options: TestOptions, state: RunnerState
+):
+    expected = _format_match_expected(test, options, state.spec)
     test_output = _format_match_test_output(result, test, state.spec)
     match = match_test_output(expected, test_output, test, state.config, state.spec)
     _log_test_result_match(match, result, test, expected, test_output, state)
-    if match.match:
+    if options.get("fails"):
+        _handle_expect_fails(match, test, state)
+    elif match.match:
         _handle_test_passed(test, match, state)
     else:
-        _handle_test_failed(test, result, state)
+        _handle_test_failed(test, result, options, state)
 
 
-def _format_match_expected(test: Test, spec: TestSpec):
+def _handle_expect_fails(match: TestMatch, test: Test, state: RunnerState):
+    if match.match:
+        _handle_unexpected_test_pass(test, state)
+    else:
+        _handle_expected_test_failed(test, state)
+
+
+def _handle_unexpected_test_pass(test: Test, state: RunnerState):
+    _print_failed_test_sep()
+    print(f"File \"{test.filename}\", line {test.line}")
+    print("Failed example:")
+    _print_test_expr(test.expr)
+    print("Expected test to fail but passed")
+    state.results["failed"] += 1
+    state.results["tested"] += 1
+
+
+def _handle_expected_test_failed(test: Test, state: RunnerState):
+    state.results["tested"] += 1
+
+
+def _format_match_expected(test: Test, options: TestOptions, spec: TestSpec):
     expected = _append_lf_for_non_empty(test.expected)
-    return _remove_blankline_markers(expected, spec.blankline)
+    blankline = _blankline_marker(options, spec)
+    if blankline:
+        expected = _remove_blankline_markers(expected, blankline)
+    return expected
+
+
+def _blankline_marker(options: TestOptions, spec: TestSpec):
+    opt_val = options.get("blankline")
+    if opt_val is None:
+        return spec.blankline
+    if not opt_val:
+        return None
+    return opt_val
 
 
 def _append_lf_for_non_empty(s: str):
@@ -694,19 +727,22 @@ def _parse_config_options(config: TestConfig, filename: str):
         if not isinstance(part, str):
             log.warning("Invalid option %r in %s: expected string", part, filename)
             continue
-        for m in OPTIONS_PATTERN.finditer(part):
-            _apply_option_match(m, parsed)
+        parsed.update(_decode_options(part))
     return parsed
 
 
-def _apply_option_match(m: Match[str], options: TestOptions):
+def _decode_options(s: str) -> Dict[str, Any]:
+    return dict(_name_val_for_option_match(m) for m in OPTIONS_PATTERN.finditer(s))
+
+
+def _name_val_for_option_match(m: Match[str]) -> Tuple[str, Any]:
     plus_name, plus_val, neg_name = m.groups()
     if neg_name:
         assert plus_name is None and plus_val is None, m
-        options[neg_name] = False
+        return neg_name, False
     else:
         assert neg_name is None, m
-        options[plus_name] = True if plus_val is None else _parse_option_val(plus_val)
+        return plus_name, True if plus_val is None else _parse_option_val(plus_val)
 
 
 def _parse_option_val(s: str):
@@ -874,9 +910,11 @@ def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
     state.results["tested"] += 1
 
 
-def _handle_test_failed(test: Test, result: TestResult, state: RunnerState):
+def _handle_test_failed(
+    test: Test, result: TestResult, options: TestOptions, state: RunnerState
+):
     _print_failed_test_sep()
-    _print_failed_test(test, result, state.spec)
+    _print_failed_test(test, result, options, state.spec)
     state.results["failed"] += 1
     state.results["tested"] += 1
 
@@ -885,7 +923,9 @@ def _print_failed_test_sep():
     print("**********************************************************************")
 
 
-def _print_failed_test(test: Test, result: TestResult, spec: TestSpec):
+def _print_failed_test(
+    test: Test, result: TestResult, options: TestOptions, spec: TestSpec
+):
     print(f"File \"{test.filename}\", line {test.line}")
     print("Failed example:")
     _print_test_expr(test.expr)
@@ -895,7 +935,7 @@ def _print_failed_test(test: Test, result: TestResult, spec: TestSpec):
     else:
         print("Expected nothing")
     print("Got:")
-    _print_test_result_output(result.output, spec)
+    _print_test_result_output(result.output, options, spec)
 
 
 def _print_test_expr(s: str):
@@ -908,14 +948,16 @@ def _print_test_expected(s: str, spec: TestSpec):
         print("    " + line)
 
 
-def _print_test_result_output(output: str, spec: TestSpec):
-    output = _format_test_result_output(output, spec)
+def _print_test_result_output(output: str, options: TestOptions, spec: TestSpec):
+    output = _format_test_result_output(output, options, spec)
     for line in output.split("\n"):
         print("    " + line)
 
 
-def _format_test_result_output(output: str, spec: TestSpec):
-    output = _insert_blankline_markers(output, spec.blankline)
+def _format_test_result_output(output: str, options: TestOptions, spec: TestSpec):
+    blankline = _blankline_marker(options, spec)
+    if blankline:
+        output = _insert_blankline_markers(output, blankline)
     return _strip_trailing_lf(output)
 
 

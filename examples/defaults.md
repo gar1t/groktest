@@ -25,9 +25,7 @@ otherwise it fails. Groktest supports methods for comparing test results
 to expected output. By default, output must match exactly. See below for
 alternative matching schemes.
 
-TODO: Test options
-
-    >> True  # +fails
+    >>> True  # +skip failing test
     true
 
 Test expressions may span multiple lines using PS2.
@@ -96,28 +94,64 @@ This is equivalent to `<BLANKLINE>` in `doctest`.
 
 Blank lines can be disabled using the `blankline` option.
 
-    >> print("|")  # -blankline
+    >>> print("|")  # -blankline
     |
 
 The token used to represent blank lines in outout can be modified when
 enabling the `blankline` option.
 
-    >> print("|\n\n|")  # +blankline=<BLANKLINE>
+    >>> print("|\n\n|")  # +blankline=<BLANKLINE>
     |
     <BLANKLINE>
     |
+
+    >>> print("")  # +blankline=xxx
+    xxx
 
 ## Wildcard matching
 
 Wildcard matching is not enabled by default.
 
-    >> "The sun is strong"  # +fails
+    >>> "The sun is strong"  # +fails
     'The ... is strong'
 
 Enable it using the `wilcard` option.
 
-    >> "The moon hovers"  # +wildcard
+    >>> "The moon hovers"  # +wildcard
     'The ... hovers'
 
-    >> "The moon hovers"  # +wildcard=*
+    >>> "The moon hovers"  # +wildcard=*
     'The * hovers'
+
+## Parsing
+
+Expected results can be parsed with pattern matching when `parse` is
+enabled.
+
+    >>> "The sun is strong"  # +parse
+    'The {} is strong'
+
+Without `parse` this fails.
+
+    >>> "The sun is strong"  # +fails
+    'The {} is strong'
+
+Patterns may contain types.
+
+    >>> print("1 + 1 is often 2")  # +parse
+    {:d} + {:d} is often {:d}
+
+Matched patterns can be bound to variables.
+
+    >>> print("1 + 1 is often 2")  # +parse
+    {x:d} + {y:d} is often {z:d}
+
+    >>> x, y, z
+    (1, 1, 2)
+
+    >>> assert x + y == z, (x, y, z)
+
+    >>> assert x + y != z, (x, y, z)  # +wildcard
+    Traceback (most recent call last):
+    ...
+    AssertionError: (1, 1, 2)
