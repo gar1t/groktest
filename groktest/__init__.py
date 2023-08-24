@@ -631,7 +631,7 @@ def _handle_test_result(
     result: TestResult, test: Test, options: TestOptions, state: RunnerState
 ):
     expected = _format_match_expected(test, options, state.spec)
-    test_output = _format_match_test_output(result, test, state.spec)
+    test_output = _format_match_test_output(result, test, options, state.spec)
     match = match_test_output(expected, test_output, test, state.config, state.spec)
     _log_test_result_match(match, result, test, expected, test_output, state)
     if options.get("fails"):
@@ -665,10 +665,20 @@ def _handle_expected_test_failed(test: Test, state: RunnerState):
 
 def _format_match_expected(test: Test, options: TestOptions, spec: TestSpec):
     expected = _append_lf_for_non_empty(test.expected)
-    blankline = _blankline_marker(options, spec)
-    if blankline:
-        expected = _remove_blankline_markers(expected, blankline)
+    expected = _maybe_remove_blankline_markers(expected, options, spec)
+    expected = _maybe_normalize_whitespace(expected, options)
     return expected
+
+
+def _append_lf_for_non_empty(s: str):
+    return s + '\n' if s else s
+
+
+def _maybe_remove_blankline_markers(s: str, options: TestOptions, spec: TestSpec):
+    marker = _blankline_marker(options, spec)
+    if not marker:
+        return s
+    return _remove_blankline_markers(s, marker)
 
 
 def _blankline_marker(options: TestOptions, spec: TestSpec):
@@ -680,18 +690,27 @@ def _blankline_marker(options: TestOptions, spec: TestSpec):
     return opt_val
 
 
-def _append_lf_for_non_empty(s: str):
-    return s + '\n' if s else s
-
-
 def _remove_blankline_markers(s: str, marker: str):
     return re.sub(rf"(?m)^{re.escape(marker)}\s*?$", "", s)
 
 
-def _format_match_test_output(result: TestResult, test: Test, spec: TestSpec):
-    # TODO: If there are any transforms to test output that are option
-    # driven, etc - use test config
-    return _truncate_empty_line_spaces(result.output)
+def _maybe_normalize_whitespace(s: str, options: TestOptions):
+    keep_whitespace = _option_value("whitespace", options, True)
+    if keep_whitespace:
+        return s
+    return _normalize_whitespace(s)
+
+
+def _normalize_whitespace(s: str):
+    return " ".join(s.split())
+
+
+def _format_match_test_output(
+    result: TestResult, test: Test, options: TestOptions, spec: TestSpec
+):
+    output = _truncate_empty_line_spaces(result.output)
+    output = _maybe_normalize_whitespace(output, options)
+    return output
 
 
 def _truncate_empty_line_spaces(s: str):
@@ -767,7 +786,7 @@ def parse_match(
 ):
     options = options or {}
     extra_types = _parselib_types(options.get("types") or {})
-    case_sensitive = _opt_value("case", options, True)
+    case_sensitive = _option_value("case", options, True)
     m = parselib.parse(
         expected,
         test_output,
@@ -780,7 +799,7 @@ def parse_match(
     return TestMatch(False)
 
 
-def _opt_value(name: str, options: Dict[str, Any], default: Any):
+def _option_value(name: str, options: Dict[str, Any], default: Any):
     try:
         val = options[name]
     except KeyError:
@@ -824,7 +843,7 @@ def _apply_transform_options(expected: str, test_output: str, options: TestOptio
 
 
 def _apply_case_option(expected: str, test_output: str, options: TestOptions):
-    if _opt_value("case", options, True):
+    if _option_value("case", options, True):
         return expected, test_output
     return expected.lower(), test_output.lower()
 

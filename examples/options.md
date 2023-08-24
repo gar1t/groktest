@@ -1,5 +1,5 @@
 ---
-test-options: +wildcard +blankline=. -case
+test-options: +wildcard +blankline=. -case -whitespace
 ---
 
 Wildcard matching is enabled in front matter above.
@@ -57,3 +57,21 @@ Case sensitive matching can be enabled per test.
 
     >>> print("X")  # This test +fails because it's +case sensitive
     x
+
+White space preservation is disabled by default in front matter.
+
+    >>> print("""
+    ... This spans
+    ... some
+    ... lines""")
+    This spans some
+    lines
+
+It can be re-enabled per test.
+
+    >>> print("""
+    ... This spans
+    ... some
+    ... lines""")  # +whitespace +fails
+    This spans some
+    lines
