@@ -155,3 +155,23 @@ Matched patterns can be bound to variables.
     Traceback (most recent call last):
     ...
     AssertionError: (1, 1, 2)
+
+## Case sensitive matching
+
+By default matches are case sensitive.
+
+    >>> print("X")  # +fails
+    x
+
+A test can be made case insensitive by disabling `case`.
+
+    >>> print("X")  # -case
+    x
+
+This behavior applies when using `parse` matching.
+
+    >>> print("X")  # +parse +fails
+    x
+
+    >>> print("X")  # +parse -case
+    x

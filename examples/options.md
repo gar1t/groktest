@@ -1,5 +1,5 @@
 ---
-test-options: +wildcard +blankline=.
+test-options: +wildcard +blankline=. -case
 ---
 
 Wildcard matching is enabled in front matter above.
@@ -19,7 +19,7 @@ The wildcard token can be modified for tests.
 
 The token can contain spaces. Strange but true.
 
-    >>> "Wildcard matching is enabled"  # +wildcard="< >"
+    >>> "Wildcard matching is enabled"  # Weird: +wildcard="< >"
     'Wild< > matching< >'
 
 Blank lines are configured in front matter as periods.
@@ -46,3 +46,14 @@ option.
     .
     .
     .
+
+`case` is disabled in front matter. Test are case insensitive by
+default.
+
+    >>> print("X")
+    x
+
+Case sensitive matching can be enabled per test.
+
+    >>> print("X")  # This test +fails because it's +case sensitive
+    x

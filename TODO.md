@@ -2,37 +2,10 @@
 
 - Ignore exception detail by default and the `???` option to disable
   that
+- Option based config of parse types (`types.name = <pattern>`)
+- How to support type conversion for parser types?? Do we care?
 
 ## Test options
-
-- Project level
-  - [ ] general
-  - [ ] doctest
-
-- Front-matter
-  - [ ] general
-  - [x] doctest
-
-- Per test
-  - [ ] general
-  - [x] doctest
-
-Per test, `doctest` uses the `doctest: [+-]OPTION` pattern. This is more
-verbose than what we'd like.
-
-Proposal is to use this pattern:
-
-    [-+] (?P<name>\w+) |
-    [+]  (?P<name>\w+) = ["']?(?P<value>.+)["']?
-
-This supports negation or deletion of options using `-<name>` options
-and enabling or setting options using `+<name>` and `+<name>=<value>`
-respectively.
-
-Examples:
-
-    >>> print("{}")  # -parse
-    {}
 
 Needed options:
 
@@ -149,70 +122,6 @@ Needed options:
   Normalize paths to be `/` or `\`. Defaults to disabled and `/` if
   enabled without an explicit value.
 
-- ``
-
-### Implementation notes
-
-Current match def:
-
-```python
-
-    def match_test_output(
-        expected: str,
-        test_output: str,
-        test: Test,
-        spec: TestSpec
-    ):
-        pass
-
-```
-
-What do we need to implement each option?
-
-Option can be defined in project config, in front matter and for a test.
-
-The test will have "test options", so we need those.
-
-Options will come from the higher level sources so we need those.
-
-These could all be rolled into a single 'options' that goes to the match
-function.
-
-Working match def:
-
-```python
-    def match_test_output(
-        expected: str,
-        test_output: str,
-        options: TestOptions
-    ):
-        return matcher(options)(expected, test_output, options)
-
-```
-
-- `parse`
-
-  - Enabled -> `parse_match`
-  - Disabled -> `str_match`
-
-- `case`
-
-  - Parse match -> use for `case_sensitive` flag
-  - Str match -> use to `.lower()`
-
-- `skip`
-- `fails`
-- `solo`
-- `blankline`
-- `wildcard`
-- `whitespace`, `ws`
-- `paths`
-
-## Globals config
-
-  - Project level
-  - Front-matter
-
 ## Final tests results should report
 
   - Total number of tests
@@ -252,49 +161,21 @@ Working match def:
         Traceback (most recent call last):
         NameError: name 'missing' is not defined
 
-
-## Express opinions (blog post)
-
-  - Documentation provides essential narrative and context for tests
-  - Narrative and context eliminate non-obvious tests
-  - Non-obvious tests are technical debt
-    - Are they correct to begin with?
-    - How must time does it take to answer this question?
-    - When they break, what needs to change?
-  - Source code should not contain tests
-    - Should focus on specifying and solving problems
-    - Tests clutter source code files with noise - move them to another
-      location
-
-pytest example:
-
-        def test_answer():
-    >       assert func(3) == 5
-    E       assert 4 == 5
-    E        +  where 4 = func(3)
-
-
-doctest/Groktest:
-
-    Failed example:
-        func(3)
-    Expected:
-        5
-    Got:
-        4
-
-## Property based testing (super speculative)
+## Property based testing
 
 From the Quick Start
 [example](https://hypothesis.readthedocs.io/en/latest/quickstart.html)
 for [Hypothesis](https://hypothesis.readthedocs.io/), a PyTest style
 test:
 
-    @given(text())
-    def test_decode_inverts_encode(s):
-        assert decode(encode(s)) == s
+```python
+@given(text())
+@example("")
+def test_decode_encode(s):
+    assert decode(encode(s)) == s
+```
 
-The implementation in as a doc test:
+As a doc test:
 
     >>> @given(text())
     ... @example("")
@@ -303,18 +184,8 @@ The implementation in as a doc test:
 
     >>> decode_encode()
 
-While it's be nice to feature `assert decode(encode(e)) == s` as the
-example, to do so requires a couple of unnatural steps:
+It'd be nice to feature `assert decode(encode(e)) == s` as the example.
 
- - An artificial var `s` needs to be defined
- - Some extra-Python spec needs to be invented to provide the test
-   config
+    >>> assert decode(encode(s)) == s # +given s = text(), example('')
 
-Something like this:
-
-    >>> s = ""
-    >>> assert decode(encode(s)) == s  #> @given(text())
-    ...                                #> @example("")
-
-This goes through mad hoops just to rephrase the test in a slightly more
-doc friendly way. It's not a good trade off I think.
+Not bad.
