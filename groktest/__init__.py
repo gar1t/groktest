@@ -60,6 +60,17 @@ class ProjectDecodeError(Error):
     pass
 
 
+ProjectConfig = Dict[str, Any]
+
+FrontMatter = Dict[str, Any]
+
+TestConfig = Dict[str, Any]
+
+TestOptions = Dict[str, Any]
+
+ParseTypes = Dict[str, str]
+
+
 class TestSpec:
     def __init__(
         self,
@@ -90,12 +101,26 @@ TestOptions = Dict[str, Any]
 
 
 class TestMatch:
-    def __init__(self, match: bool, vars: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        match: bool,
+        vars: Optional[Dict[str, Any]] = None,
+        reason: Optional[Any] = None,
+    ):
         self.match = match
         self.vars = vars
+        self.reason = reason
 
 
-TestMatcher = Callable[[str, str, Optional[TestOptions]], TestMatch]
+TestMatcher = Callable[
+    [
+        str,
+        str,
+        Optional[TestOptions],
+        Optional[TestConfig],
+    ],
+    TestMatch,
+]
 
 
 class Test:
@@ -232,16 +257,6 @@ RUNTIME = {
     "doctest": "groktest.doctest.DoctestRuntime",
     "python": "groktest.python.PythonRuntime",
 }
-
-ProjectConfig = Dict[str, Any]
-
-FrontMatter = Dict[str, Any]
-
-TestConfig = Dict[str, Any]
-
-TestOptions = Dict[str, Any]
-
-ParseTypes = Dict[str, str]
 
 
 def init_runner_state(filename: str, project_config: Optional[ProjectConfig] = None):
@@ -694,7 +709,7 @@ def _handle_test_result(
     elif match.match:
         _handle_test_passed(test, match, state)
     else:
-        _handle_test_failed(test, result, options, state)
+        _handle_test_failed(test, match, result, options, state)
 
 
 def _handle_expect_fails(match: TestMatch, test: Test, state: RunnerState):
@@ -780,7 +795,7 @@ def match_test_output(
     spec: TestSpec,
 ):
     options = _test_options(test, config, spec)
-    return matcher(options)(expected, test_output, options)
+    return matcher(options)(expected, test_output, options, config)
 
 
 def _test_options(test: Test, config: TestConfig, spec: TestSpec):
@@ -838,20 +853,26 @@ def parse_match(
     expected: str,
     test_output: str,
     options: Optional[TestOptions] = None,
+    config: Optional[TestConfig] = None,
 ):
     options = options or {}
-    extra_types = _parselib_types(options.get("types") or {})
+    config = config or {}
     case_sensitive = _option_value("case", options, True)
-    m = parselib.parse(
-        expected,
-        test_output,
-        extra_types,
-        evaluate_result=True,
-        case_sensitive=case_sensitive,
-    )
-    if m:
-        return TestMatch(True, cast(parselib.Result, m).named)
-    return TestMatch(False)
+    extra_types = _parselib_types(config)
+    try:
+        m = parselib.parse(
+            expected,
+            test_output,
+            extra_types,
+            evaluate_result=True,
+            case_sensitive=case_sensitive,
+        )
+    except ValueError as e:
+        return TestMatch(False, None, e)
+    else:
+        if m:
+            return TestMatch(True, cast(parselib.Result, m).named)
+        return TestMatch(False)
 
 
 def _option_value(name: str, options: Dict[str, Any], default: Any):
@@ -863,7 +884,10 @@ def _option_value(name: str, options: Dict[str, Any], default: Any):
         return default if val is None else val
 
 
-def _parselib_types(types: ParseTypes):
+def _parselib_types(config: TestConfig) -> Dict[str, Callable[[str], Any]]:
+    types: Optional[ParseTypes] = config.get("types")
+    if not types:
+        return {}
     return {
         type_name: _parselib_regex_converter(pattern)
         for type_name, pattern in types.items()
@@ -882,6 +906,7 @@ def str_match(
     expected: str,
     test_output: str,
     options: Optional[TestOptions] = None,
+    config: Optional[TestConfig] = None,
 ):
     options = options or {}
     expected, test_output = _apply_transform_options(expected, test_output, options)
@@ -985,10 +1010,14 @@ def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
 
 
 def _handle_test_failed(
-    test: Test, result: TestResult, options: TestOptions, state: RunnerState
+    test: Test,
+    match: TestMatch,
+    result: TestResult,
+    options: TestOptions,
+    state: RunnerState,
 ):
     _print_failed_test_sep()
-    _print_failed_test(test, result, options, state.spec)
+    _print_failed_test(test, match, result, options, state.spec)
     state.results["failed"] += 1
     state.results["tested"] += 1
 
@@ -998,7 +1027,11 @@ def _print_failed_test_sep():
 
 
 def _print_failed_test(
-    test: Test, result: TestResult, options: TestOptions, spec: TestSpec
+    test: Test,
+    match: TestMatch,
+    result: TestResult,
+    options: TestOptions,
+    spec: TestSpec,
 ):
     print(f"File \"{test.filename}\", line {test.line}")
     print("Failed example:")
@@ -1010,6 +1043,9 @@ def _print_failed_test(
         print("Expected nothing")
     print("Got:")
     _print_test_result_output(result.output, options, spec)
+    if match.reason:
+        print(f"Reason:")
+        _print_mismatch_reason(match.reason, test)
 
 
 def _print_test_expr(s: str):
@@ -1041,6 +1077,26 @@ def _insert_blankline_markers(s: str, marker: str):
 
 def _strip_trailing_lf(s: str):
     return s[:-1] if s[-1:] == "\n" else s
+
+
+def _print_mismatch_reason(reason: Any, test: Test):
+    msg = str(reason)
+    # Try format spec error message
+    m = re.match(r"format spec '(.+?)' not recognised", msg)
+    if m:
+        type = m.group(1)
+        line = _find_parse_type_line(type, test.expected)
+        line_msg = f" on line {line}" if line is not None else ""
+        print(f"    Unsupported parse type '{type}'{line_msg}")
+    else:
+        print(f"    {msg}")
+
+
+def _find_parse_type_line(type: str, s: str):
+    m = re.search(rf"{{\s*(?:[^\s:]+)?\s*:\s*{re.escape(type)}\s*?}}", s)
+    if m:
+        return s[: m.start()].count("\n") + 1
+    return None
 
 
 def _doctest_file(filename: str, config: TestConfig):

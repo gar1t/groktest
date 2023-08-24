@@ -91,9 +91,10 @@ The token is consumed from left to right.
 Grokville's `parse` option enables parse matching. Parse matching is
 implemented by `groktest.parse_match`.
 
-    >>> def parse_match(expected, test_output, options=None):
+    >>> def parse_match(expected, test_output, options=None, types=None):
     ...     from groktest import parse_match as parse_match0
-    ...     m = parse_match0(expected, test_output, options)
+    ...     config = {"types": types} if types else {}
+    ...     m = parse_match0(expected, test_output, options, config)
     ...     pprint(m.vars if m.match else None)
 
 Match simple output.
@@ -143,21 +144,21 @@ Groktest match support can be customized with custom match types.
     >>> parse_match(
     ...     "A {:color} cat",
     ...     "A blue cat",
-    ...     {"types": {"color": "blue|red"}}
+    ...     types={"color": "blue|red"}
     ... )
     {}
 
     >>> parse_match(
     ...     "A {color:color} cat",
     ...     "A red cat",
-    ...     {"types": {"color": "blue|red"}}
+    ...     types={"color": "blue|red"}
     ... )
     {'color': 'red'}
 
     >>> parse_match(
     ...     "A {:color} cat",
     ...     "A green cat",
-    ...     {"types": {"color": "blue|red"}}
+    ...     types={"color": "blue|red"}
     ... )
     None
 
@@ -168,7 +169,7 @@ By default matches are case sensitive.
 
 Compare with case insensitive.
 
-    >>> parse_match("Hello", "hello", {"case": False})
+    >>> parse_match("Hello", "hello", options={"case": False})
     {}
 
 Match types can specify a case-insensitive pattern using `(?i)`.
@@ -176,14 +177,14 @@ Match types can specify a case-insensitive pattern using `(?i)`.
     >>> parse_match(
     ...     "A {color:color} cat",
     ...     "A RED cat",
-    ...     {"types": {"color": "(?i)blue|red"}}
+    ...     types={"color": "(?i)blue|red"}
     ... )
     {'color': 'RED'}
 
     >>> parse_match(
     ...     "A {color:color} cat",
     ...     "A bluE cat",
-    ...     {"types": {"color": "(?i)blue|red"}}
+    ...     types={"color": "(?i)blue|red"}
     ... )
     {'color': 'bluE'}
 

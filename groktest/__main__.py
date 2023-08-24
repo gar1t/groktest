@@ -33,10 +33,11 @@ def main():
     failed = tested = 0
 
     for filename in _test_filenames(config, args):
+        relname = os.path.relpath(filename)
         if args.preview:
-            print(f"Testing {filename} (preview)")
+            print(f"Testing {relname} (preview)")
             continue
-        print(f"Testing {filename}")
+        print(f"Testing {relname}")
         try:
             result = test_file(filename, config)
         except FileNotFoundError:
