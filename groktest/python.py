@@ -10,16 +10,21 @@ import io
 import json
 import logging
 import os
+import pprint
 import signal
 import subprocess
 import sys
 import textwrap
 import traceback
+from typing import Optional
+
+from groktest import TestConfig
 
 from .__init__ import Runtime
 from .__init__ import Test
 from .__init__ import TestConfig
 from .__init__ import TestMatch
+from .__init__ import TestOptions
 from .__init__ import TestResult
 from .__init__ import TestSpec
 
@@ -33,11 +38,14 @@ class Init:
 
 class TestExpr:
     def __init__(
-        self, expr: str, filename: Optional[str], compile_flags: Optional[int]
+        self,
+        expr: str,
+        filename: Optional[str],
+        options: Optional[TestOptions],
     ):
         self.expr = expr
         self.filename = filename
-        self.compile_flags = compile_flags
+        self.options = options or {}
 
 
 class Vars:
@@ -49,18 +57,21 @@ class PythonRuntime(Runtime):
     config: Optional[TestSpec] = None
     _p: Optional[subprocess.Popen[str]] = None
 
-    def init(self, config: Optional[TestConfig] = None):
+    def start(self, config: Optional[TestConfig] = None):
         self._p = _open_proc()
-        _init_runtime(config, self._p)
 
-    def exec_test_expr(self, test: Test):
-        return _exec_test_expr(test, _check_proc(self._p))
+    def init_for_tests(self, config: TestConfig | None = None) -> None:
+        if config:
+            _init_for_tests(config, _check_proc(self._p))
+
+    def exec_test_expr(self, test: Test, options: TestOptions):
+        return _exec_test_expr(test, options, _check_proc(self._p))
 
     def handle_test_match(self, match: TestMatch):
         if match.match and match.vars:
             _update_vars(match.vars, _check_proc(self._p))
 
-    def shutdown(self, timeout: int = 5):
+    def stop(self, timeout: int = 5):
         if self._p:
             _close_proc(self._p, timeout)
             self._p = None
@@ -69,7 +80,7 @@ class PythonRuntime(Runtime):
         return self._p is not None
 
     def __del__(self):
-        self.shutdown(0)
+        self.stop(0)
 
 
 def _open_proc():
@@ -109,21 +120,30 @@ def _close_proc(p: Popen[str], timeout: int):
         p.send_signal(signal.SIGKILL)
 
 
-def _init_runtime(config: Optional[TestConfig], proc: Popen[str]):
-    init_spec = config and config.get("python-init")
-    if not init_spec:
+def _init_for_tests(config: TestConfig, proc: Popen[str]):
+    init_expr = _init_expr(config)
+    if not init_expr:
         return
-    if not isinstance(init_spec, (str, list)):
-        log.warning(
-            "python-init must be a string or list of strings "
-            f"(got {type(init_spec).__name__})"
-        )
-        return
-    if isinstance(init_spec, list):
-        init_spec = "\n".join([str(line) for line in init_spec])
     stdin, stdout = _proc_streams(proc)
-    _write_init_req(init_spec, stdin)
+    _write_init_req(init_expr, stdin)
     _read_ack(stdout)
+
+
+def _init_expr(config: TestConfig):
+    try:
+        expr = config["python"]["init"]
+    except KeyError:
+        return None
+    else:
+        if not isinstance(expr, (str, list)):
+            log.warning(
+                "python init must be a string or list of strings "
+                f"(got {type(expr).__name__})"
+            )
+            return None
+        if isinstance(expr, list):
+            expr = "\n".join([str(line) for line in expr])
+        return expr
 
 
 def _write_init_req(init: str, out: IO[str]):
@@ -143,19 +163,19 @@ def _read_ack(input: IO[str]):
         raise RuntimeError(resp)
 
 
-def _exec_test_expr(test: Test, proc: Popen[str]):
+def _exec_test_expr(test: Test, options: TestOptions, proc: Popen[str]):
     stdin, stdout = _proc_streams(proc)
-    _write_test_req(test, stdin)
+    _write_test_exec_req(test, options, stdin)
     return _read_test_result(stdout)
 
 
-def _write_test_req(test: Test, out: IO[str]):
+def _write_test_exec_req(test: Test, options: TestOptions, out: IO[str]):
     req = json.dumps(
         {
             "type": "test",
             "expr": test.expr,
             "filename": test.filename,
-            "compile-flags": 0,
+            "options": options,
         }
     )
     _write_req(req, out)
@@ -178,7 +198,7 @@ def _write_vars_req(vars: Dict[str, Any], out: IO[str]):
 
 
 def _main_loop():
-    globals = _init_globals()
+    globals = {}
     while True:
         line = _readline()
         if not line:
@@ -194,18 +214,6 @@ def _main_loop():
             assert False, req
 
 
-def _init_globals():
-    from pprint import pprint as pprint0
-
-    def pprint(s: str, **kw: Any):
-        kw = dict(width=72, **kw)
-        pprint0(s, **kw)
-
-    return {
-        "pprint": pprint,
-    }
-
-
 def _readline():
     return sys.stdin.readline().rstrip()
 
@@ -216,7 +224,7 @@ def _decode_request(line: str):
         return TestExpr(
             expr=data["expr"],
             filename=data.get("filename"),
-            compile_flags=data.get("compfile-flags"),
+            options=data.get("options"),
         )
     elif data["type"] == "vars":
         return Vars(data["vars"])
@@ -252,7 +260,6 @@ def _log_test_result(output: str, exc_info: Any):
     log.debug("Test result:")
     log.debug(textwrap.indent(output, "  "))
     if exc_info and log.getEffectiveLevel() <= logging.DEBUG:
-        # Only format exc info if need be
         log.debug("%s", _format_exc_info(exc_info))
 
 
@@ -272,20 +279,48 @@ class _StdOutCapture(io.StringIO):
 
 
 def _exec_test(test: TestExpr, globals: Dict[str, Any]):
-    _apply_test_globals(test, globals)
-    exec(
-        compile(
-            test.expr,
-            test.filename or "<test>",
-            "single",
-            test.compile_flags or 0,
-            dont_inherit=True,
-        ),
-        globals,
+    _apply_test_globals_effect(test, globals)
+    code = _compile_test_expr(test)
+    result = eval(code, globals)
+    _maybe_pretty_print_result(result, test.options)
+
+
+def _maybe_pretty_print_result(result: Any, options: TestOptions):
+    if result is None or not options.get("pprint"):
+        return
+    pprint.pprint(result, width=72)
+
+
+def _compile_test_expr(test: TestExpr):
+    """Returns compiled test expression.
+
+    Tries to compile using 'eval' mode if test is configured for pretty
+    print (`pprint` option is true), otherwise compiles using 'single'
+    mode. 'single' mode prints evaluated results in the standard way (no
+    pretty print format). If the expression can't be compiled for
+    evaluation (i.e. we get a syntax error) we fall back on 'single'
+    mode.
+    """
+    if not test.options.get("pprint"):
+        return _gen_compile_test_expr("single", test)
+
+    # Test wants pretty print - try 'eval' mode
+    try:
+        return _gen_compile_test_expr("eval", test)
+    except SyntaxError:
+        return _gen_compile_test_expr("single", test)
+
+
+def _gen_compile_test_expr(mode: str, test: TestExpr):
+    return compile(
+        test.expr,
+        test.filename or "<test>",
+        mode,
+        dont_inherit=True,
     )
 
 
-def _apply_test_globals(test: TestExpr, globals: Dict[str, Any]):
+def _apply_test_globals_effect(test: TestExpr, globals: Dict[str, Any]):
     globals["__name__"] = (
         os.path.basename(test.filename) if test.filename else "__test__"
     )
@@ -325,6 +360,7 @@ def _log_vars(vars: Vars):
 
 def _handle_init(init: Init, globals: Dict[str, Any]):
     _log_init(init)
+    globals.clear()
     try:
         exec(init.expr, globals)
     except Exception as e:

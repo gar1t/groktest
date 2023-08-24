@@ -135,9 +135,16 @@ def _try_project_config(args: Any):
         if not os.path.isfile(path):
             continue
         try:
-            return load_project_config(path)
+            config = load_project_config(path)
         except ProjectDecodeError as e:
             log.debug("Error loading project config from %s: %s", path, e)
+        else:
+            if len(args.paths) > 1:
+                raise SystemExit(
+                    f"extra arguments '{' '.join(args.paths[1:])}' to project "
+                    "path not currently supported"
+                )
+            return config
     return None
 
 
@@ -154,8 +161,13 @@ def _test_filenames(config: Optional[ProjectConfig], args: Any):
         src = config["__src__"]
         raise SystemExit(f"Missing 'include' in 'tool.groktest' section in {src}")
     else:
+        basepath = os.path.dirname(config["__src__"])
         return _filenames_for_test_patterns(
-            include, _coerce_list(config.get("exclude"))
+            include,
+            _coerce_list(
+                config.get("exclude"),
+            ),
+            basepath,
         )
 
 
@@ -167,17 +179,18 @@ def _coerce_list(val: Any) -> List[Any]:
     return [val]
 
 
-def _filenames_for_test_patterns(include: List[str], exclude: List[str]):
-    excluded = set(_apply_test_patterns(exclude or [], "exclude"))
-    included = _apply_test_patterns(include, "include")
+def _filenames_for_test_patterns(include: List[str], exclude: List[str], basepath: str):
+    excluded = set(_apply_test_patterns(exclude or [], basepath, "exclude"))
+    included = _apply_test_patterns(include, basepath, "include")
     return [path for path in included if path not in excluded]
 
 
-def _apply_test_patterns(patterns: List[str], desc: str):
+def _apply_test_patterns(patterns: List[str], basepath: str, desc: str):
     filenames: List[str] = []
     for pattern in patterns:
-        matches = glob.glob(pattern, recursive=True)
-        log.debug("tests for {desc} pattern '%s': %s", pattern, matches)
+        pattern_path = os.path.join(basepath, pattern)
+        matches = glob.glob(pattern_path, recursive=True)
+        log.debug("tests for %s pattern '%s': %s", desc, pattern, matches)
         filenames.extend(matches)
     return filenames
 

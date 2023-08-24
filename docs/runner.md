@@ -43,7 +43,7 @@ The runtime available from the state is available.
 
 Runtime should be stopped when no longer needed.
 
-    >>> state.runtime.shutdown()
+    >>> state.runtime.stop()
 
 ## Errors
 

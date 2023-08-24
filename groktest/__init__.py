@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import *
 
 import configparser
+import copy
 import importlib
 import io
 import json
@@ -20,18 +21,18 @@ __all__ = [
     "DEFAULT_SPEC",
     "Error",
     "init_runner_state",
-    "init_runtime",
     "match_test_output",
-    "ParseTypes",
     "parse_tests",
+    "ParseTypes",
     "ProjectDecodeError",
     "PYTHON_SPEC",
     "RunnerState",
     "Runtime",
     "RUNTIME",
     "RuntimeNotSupported",
-    "test_file",
     "SPECS",
+    "start_runtime",
+    "test_file",
     "Test",
     "TestMatch",
     "TestMatcher",
@@ -120,16 +121,19 @@ class TestResult:
 
 
 class Runtime:
-    def init(self, config: Optional[TestConfig] = None) -> None:
+    def start(self, config: Optional[TestConfig] = None) -> None:
         raise NotImplementedError()
 
-    def exec_test_expr(self, test: Test) -> TestResult:
+    def init_for_tests(self, config: Optional[TestConfig] = None) -> None:
+        raise NotImplementedError()
+
+    def exec_test_expr(self, test: Test, options: TestOptions) -> TestResult:
         raise NotImplementedError()
 
     def handle_test_match(self, match: TestMatch) -> None:
         raise NotImplementedError()
 
-    def shutdown(self, timeout: int = 0) -> None:
+    def stop(self, timeout: int = 0) -> None:
         raise NotImplementedError()
 
     def is_available(self) -> bool:
@@ -137,18 +141,18 @@ class Runtime:
 
 
 class RuntimeScope:
-    def __init__(self, runtime: Runtime, shutdown_timeout: Optional[int] = None):
+    def __init__(self, runtime: Runtime, stop_timeout: Optional[int] = None):
         self.runtime = runtime
-        self.shutdown_timeout = shutdown_timeout
+        self.stop_timeout = stop_timeout
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc: Any):
-        if self.shutdown_timeout is not None:
-            self.runtime.shutdown(self.shutdown_timeout)
+        if self.stop_timeout is not None:
+            self.runtime.stop(self.stop_timeout)
         else:
-            self.runtime.shutdown()
+            self.runtime.stop()
 
 
 class RunnerState:
@@ -239,10 +243,6 @@ TestOptions = Dict[str, Any]
 
 ParseTypes = Dict[str, str]
 
-FRONT_MATTER_TO_CONFIG = {
-    "test-options": "options",
-}
-
 
 def init_runner_state(filename: str, project_config: Optional[ProjectConfig] = None):
     filename = os.path.abspath(filename)
@@ -252,7 +252,7 @@ def init_runner_state(filename: str, project_config: Optional[ProjectConfig] = N
     test_config = _test_config(fm, project_config, filename)
     if spec is DOCTEST_MARKER:
         return DocTestRunnerState(filename, test_config)
-    runtime = init_runtime(spec.runtime, test_config)
+    runtime = start_runtime(spec.runtime, test_config)
     tests = parse_tests(contents, spec, filename)
     return RunnerState(tests, runtime, spec, test_config, filename)
 
@@ -522,51 +522,85 @@ def _test_config(
 
 
 def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> TestConfig:
-    test_config = _normalize_front_matter(test_fm)
+    test_config = front_matter_to_config(test_fm)
     # Start with project taking precedence over test config
-    merged = {**test_config, **project_config}
+    merged = {
+        **copy.deepcopy(test_config),
+        **copy.deepcopy(project_config),
+    }
     # Selectively merge/append test config back into result
-    _merge_replace("options", test_fm, merged)
-    _merge_append("python-init", test_fm, merged)
+    _merge_replace(["options"], test_config, merged)
+    _merge_append(["python", "init"], test_config, merged)
     return merged
 
 
-def _normalize_front_matter(fm: FrontMatter) -> TestConfig:
+FRONT_MATTER_TO_CONFIG = {
+    "test-options": ["options"],
+    "python-init": ["python", "init"],
+}
+
+
+def front_matter_to_config(fm: FrontMatter) -> TestConfig:
     try:
         return fm["tool"]["groktest"]
     except KeyError:
-        return _map_front_matter_option_names(fm)
+        return _mapped_front_matter_config(fm)
 
 
-def _map_front_matter_option_names(fm: FrontMatter) -> TestConfig:
-    return {FRONT_MATTER_TO_CONFIG.get(name, name): fm[name] for name in fm}
+def _mapped_front_matter_config(fm: FrontMatter) -> TestConfig:
+    config = {}
+    for name in fm:
+        config_path = FRONT_MATTER_TO_CONFIG.get(name, [name])
+        target = config
+        for part in config_path[:-1]:
+            target = config.setdefault(part, {})
+        target[config_path[-1]] = fm[name]
+    return config
 
 
-def _merge_replace(name: str, src: Dict[str, Any], dest: Dict[str, Any]):
-    try:
-        src_val = src[name]
-    except KeyError:
-        pass
-    else:
-        dest[name] = src_val
+def _merge_replace(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
+    key, val, merge_dest = _merge_kv_dest(path, src, dest)
+    if not key:
+        return
+    assert merge_dest
+    merge_dest[key] = val
 
 
-def _merge_append(name: str, src: Dict[str, Any], dest: Dict[str, Any]):
-    try:
-        src_val = src[name]
-    except KeyError:
-        pass
-    else:
+def _merge_kv_dest(
+    path: List[str],
+    src: Dict[str, Any],
+    dest: Dict[str, Any],
+) -> Union[Tuple[None, None, None], Tuple[str, Any, Dict[str, Any]]]:
+    cur_src = src
+    for key in path[:-1]:
         try:
-            dest_val = dest[name]
+            cur_src = src[key]
         except KeyError:
-            dest[name] = src_val
-        else:
-            dest[name] = _coerce_list(src_val) + _coerce_list(dest_val)
+            return None, None, None
+    try:
+        val = cur_src[path[-1]]
+    except KeyError:
+        return None, None, None
+
+    cur_dest = dest
+    for key in path[:-1]:
+        cur_dest = cur_dest.setdefault(key, {})
+        if not isinstance(cur_dest, dict):
+            return None, None, None
+
+    return path[-1], val, cur_dest
+
+
+def _merge_append(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
+    key, src_val, append_dest = _merge_kv_dest(path, src, dest)
+    if not key:
+        return
+    assert append_dest
+    append_dest[key] = _coerce_list(src_val) + _coerce_list(append_dest.get(key))
 
 
 def _coerce_list(x: Any) -> List[Any]:
-    return x if isinstance(x, list) else [x]
+    return x if isinstance(x, list) else [] if x is None else [x]
 
 
 def _try_test_file_project_config(filename: str):
@@ -592,7 +626,7 @@ def _iter_parents(path: str):
         last = parent
 
 
-def init_runtime(name: str, config: Optional[TestConfig] = None):
+def start_runtime(name: str, config: Optional[TestConfig] = None):
     try:
         import_spec = RUNTIME[name]
     except KeyError:
@@ -603,7 +637,7 @@ def init_runtime(name: str, config: Optional[TestConfig] = None):
         modname, classname = import_spec.rsplit(".", 1)
         mod = importlib.import_module(modname)
         rt = cast(Runtime, getattr(mod, classname)())
-        rt.init(config)
+        rt.start(config)
         return rt
 
 
@@ -612,15 +646,36 @@ def test_file(filename: str, config: Optional[ProjectConfig] = None):
     if isinstance(state, DocTestRunnerState):
         return _doctest_file(state.filename, state.config)
     assert isinstance(state, RunnerState)
+    assert state.runtime.is_available
+    state.runtime.init_for_tests(state.config)
+    _apply_skip_for_solo(state.tests)
     with RuntimeScope(state.runtime):
+        skiprest = False
         for test in state.tests:
             options = _test_options(test, state.config, state.spec)
-            if options.get("skip"):
+            skiprest = _skiprest(options, skiprest)
+            if _skip_test(options, skiprest):
                 _handle_test_skipped(test, state)
             else:
-                result = state.runtime.exec_test_expr(test)
+                result = state.runtime.exec_test_expr(test, options)
                 _handle_test_result(result, test, options, state)
         return state.results
+
+
+def _apply_skip_for_solo(tests: List[Test]):
+    solo_tests = [test for test in tests if test.options.get("solo")]
+    if not solo_tests:
+        return
+    for test in tests:
+        test.options["skip"] = test not in solo_tests
+
+
+def _skiprest(options: TestOptions, skiprest: bool):
+    return _option_value("skiprest", options, skiprest)
+
+
+def _skip_test(options: TestOptions, skiprest: bool):
+    return _option_value("skip", options, skiprest)
 
 
 def _handle_test_skipped(test: Test, state: RunnerState):

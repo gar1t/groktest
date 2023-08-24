@@ -5,14 +5,13 @@ python-init: "msg = 'Hello!'"
 
 # Python Globals
 
-    >>> pprint(sorted(globals()))
+    >>> sorted(globals())  # +pprint
     ['__builtins__',
      '__file__',
      '__name__',
      'load_project_config',
      'msg',
      'path',
-     'pprint',
      're']
 
 Python tests have access to the standard set of Python builtins.
@@ -30,22 +29,6 @@ Python tests have access to the standard set of Python builtins.
     >>> __file__
     '.../examples/python-globals.md'
 
-`pprint` is provided by the Python runtime to print formatted values.
-This provides for consistent value display that wraps appropriately in
-test docs.
-
-    >>> pprint(list(range(0, 1000000, 100000)))
-    [0,
-     100000,
-     200000,
-     300000,
-     400000,
-     500000,
-     600000,
-     700000,
-     800000,
-     900000]
-
 All other globals are configured by `python-init` configuration, which
 may be defined in project configuration (i.e. `pyproject.toml`) and in
 test front matter. In this case, Python globals are initialized by
@@ -56,14 +39,13 @@ Show project config using `load_project_config`:
 
     >>> project_config = path.normpath(__file__ + "/../../pyproject.toml")
 
-    >>> pprint(load_project_config(project_config))
+    >>> load_project_config(project_config)  # +pprint
     {'__src__': '.../pyproject.toml',
      'exclude': ['docs/yaml.md', 'examples/unknown-format.md'],
      'include': ['README.md', 'docs/*.md', 'examples/*.md'],
-     'python-init': 'from groktest import load_project_config\n'
-                    'from os import path\n'
-                    'import re\n'}
-
+     'python': {'init': 'from groktest import load_project_config\n'
+                        'from os import path\n'
+                        'import re\n'}}
 
 `re` is available via project config:
 

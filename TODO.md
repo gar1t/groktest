@@ -19,6 +19,13 @@ Run with tags:
 
     $ groktest . core
 
+Test files could have dependencies on other files. When you run one it
+causes others to run. If upstream tests fail, downstream tests are
+skipped.
+
+This is how we can implement uat alongside the other tests. E.g. do we
+need to waste time running 'aws' tests if 'core' tests have failed?
+
 ## Shell runtime
 
 Time to start thinking about shell based runtimes.

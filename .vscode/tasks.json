@@ -68,6 +68,7 @@
         "examples/defaults.md",
         "examples/doctest.md",
         "examples/python-globals.md",
+        "examples/python-globals-2.md",
         "examples/unkown-format.md"
       ]
     }

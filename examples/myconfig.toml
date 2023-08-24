@@ -1,0 +1,6 @@
+[tool.groktest]
+
+include = [
+    "assert.md",
+    "options.md"
+]

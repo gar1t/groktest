@@ -2,7 +2,7 @@
 test-type: doctest
 ---
 
-# Groktest front matter
+# Front matter
 
 Front matter is denoted by a line `---` at the start of the file
 followed by a subseuqnet line `---`.
@@ -284,3 +284,43 @@ TOML based config supported using `groktest._vendor_tomli`.
     {'test-config': {'parse-types': {'id': '[a-f0-9]{8}'},
                      'ps1': '>',
                      'ps2': '+'}}
+
+## Top-level front matter to config
+
+Groktest config is a normalized structure used internally. Front matter
+may be specified using Groktest config or it may use a simplified
+top-level schema.
+
+The mapping of simplified front matter to config is described by
+`groktest.FRONT_MATTER_TO_CONFIG`,
+
+    >>> from groktest import FRONT_MATTER_TO_CONFIG
+
+    >>> pprint(FRONT_MATTER_TO_CONFIG)
+    {'python-init': ['python', 'init'], 'test-options': ['options']}
+
+Front matter is converted to config using `front_matter_to_config`.
+
+    >>> from groktest import front_matter_to_config  # -skiprest
+
+In the simple case, fully defined configuration is passed through.
+
+    >>> front_matter_to_config({
+    ...     "tool": {
+    ...         "groktest": {
+    ...             "foo": "anything here is passed through",
+    ...             "bar": 123
+    ...         }
+    ...     }
+    ... })
+    {'foo': 'anything here is passed through', 'bar': 123}
+
+For simplified top-level config, as specified in
+`FRONT_MATTER_TO_CONFIG`, values are applied to the canonical config
+structure.
+
+    >>> front_matter_to_config({
+    ...     "test-options": {"pprint": True},
+    ...     "python-init": "import foobar"
+    ... })
+    {'options': {'pprint': True}, 'python': {'init': 'import foobar'}}

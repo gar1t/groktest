@@ -41,7 +41,7 @@ exclude = [
   "examples/unknown-format.md"
 ]
 
-python-init = """
+python.init = """
 from groktest import load_project_config
 from os import path
 import re

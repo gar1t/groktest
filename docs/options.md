@@ -22,7 +22,7 @@ enabled or disabled, When enabled, an option may have a value.
 
   Disable for case-insensitive matches using `-case`.
 
-- `skip` (NOT YET IMPLEMENYTED)
+- `skip`
 
   Skips a test. Disabled by default.
 
@@ -30,7 +30,14 @@ enabled or disabled, When enabled, an option may have a value.
   front-matter. Individual tests can be unskipped using `-skip` in this
   case.
 
-- `fails` (NOT YET IMPLEMENTED)
+- `skiprest`
+
+  Skips current and following tests. Disabled by default.
+
+  Subsequent tests can be unskipped using `-skip`. Similarly, `skiprest`
+  can be disabled using `-skiptest`.
+
+- `fails`
 
   Indicates that the test is expected to fail. Disabled by default.
 
@@ -69,7 +76,7 @@ enabled or disabled, When enabled, an option may have a value.
   The wildcard can be configured for all tests in a test file using the
   file front matter.
 
-- `whitespace`, `ws` (NOT YET IMPLEMENTED)
+- `whitespace`
 
   Consider whitespace when comparing expected and test output. Enabled
   by default.
@@ -81,6 +88,13 @@ enabled or disabled, When enabled, an option may have a value.
 
   Normalize paths to be `/` or `\`. Defaults to disabled and `/` if
   enabled without an explicit value.
+
+- `pprint`
+
+  Test output is formatted using "pretty print" when enabled. Disabled
+  by default.
+
+  Runtimes supported: Python
 
 ## Parsing options
 
