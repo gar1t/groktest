@@ -561,8 +561,8 @@ def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> Test
 
 
 FRONT_MATTER_TO_CONFIG = {
-    "parse-types": ["types"],
-    "parse-type-functions": ["type-functions"],
+    "parse-types": ["parse", "types"],
+    "parse-functions": ["parse", "functions"],
     "python-init": ["python", "init"],
     "test-options": ["options"],
 }
@@ -905,12 +905,14 @@ def _parselib_types(config: TestConfig) -> ParseTypeFunctions:
 
 
 def _parselib_module_types(config: TestConfig) -> ParseTypeFunctions:
-    functions_spec = config.get("type-functions")
-    if not functions_spec:
+    try:
+        functions_spec = config["parse"]["functions"]
+    except KeyError:
         return {}
-    functions_spec = _coerce_list(functions_spec)
-    path = _config_src_path(config)
-    return dict(_iter_parse_functions(functions_spec, path))
+    else:
+        functions_spec = _coerce_list(functions_spec)
+        path = _config_src_path(config)
+        return dict(_iter_parse_functions(functions_spec, path))
 
 
 def _config_src_path(config: TestConfig):
@@ -990,13 +992,15 @@ def _is_parse_function(x: Any):
 
 
 def _parselib_regex_types(config: TestConfig) -> ParseTypeFunctions:
-    types: Optional[ParseTypes] = config.get("types")
-    if not types:
+    try:
+        types = config["parse"]["types"]
+    except KeyError:
         return {}
-    return {
-        type_name: _parselib_regex_converter(pattern)
-        for type_name, pattern in types.items()
-    }
+    else:
+        return {
+            type_name: _parselib_regex_converter(pattern)
+            for type_name, pattern in types.items()
+        }
 
 
 def _parselib_regex_converter(pattern: str):

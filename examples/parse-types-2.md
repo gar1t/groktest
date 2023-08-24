@@ -1,6 +1,6 @@
 ---
 test-options = "+parse"
-parse-type-functions = "custom_types"
+parse-functions = "custom_types"
 ---
 
 # Custom parse types

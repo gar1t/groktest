@@ -297,8 +297,8 @@ The mapping of simplified front matter to config is described by
     >>> from groktest import FRONT_MATTER_TO_CONFIG
 
     >>> pprint(FRONT_MATTER_TO_CONFIG)
-    {'parse-type-functions': ['type-functions'],
-     'parse-types': ['types'],
+    {'parse-functions': ['parse', 'functions'],
+     'parse-types': ['parse', 'types'],
      'python-init': ['python', 'init'],
      'test-options': ['options']}
 

@@ -1,8 +1,5 @@
 ---
 test-type = "doctest"
-
-# [tool.groktest]
-# types.color = "blue|red"  # Future!
 ---
 
 # Matching test results
@@ -93,7 +90,7 @@ implemented by `groktest.parse_match`.
 
     >>> def parse_match(expected, test_output, options=None, types=None):
     ...     from groktest import parse_match as parse_match0
-    ...     config = {"types": types} if types else {}
+    ...     config = {"parse": {"types": types}} if types else {}
     ...     m = parse_match0(expected, test_output, options, config)
     ...     pprint(m.vars if m.match else None)
 
