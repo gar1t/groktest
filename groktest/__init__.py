@@ -7,6 +7,7 @@ from types import ModuleType
 
 import configparser
 import copy
+import difflib
 import importlib
 import inspect
 import io
@@ -247,7 +248,7 @@ PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     ps1=">>>",
     ps2="...",
     test_pattern=DEFAULT_TEST_PATTERN,
-    blankline="|",
+    blankline="⤶",
     wildcard="...",
     option_candidates=_python_comments,
 )
@@ -554,7 +555,7 @@ def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> Test
         **copy.deepcopy(project_config),
     }
     # Selectively merge/append test config back into result
-    _merge_replace(["options"], test_config, merged)
+    _merge_append_list(["options"], test_config, merged)
     _merge_append_list(["python", "init"], test_config, merged)
     _merge_append_list(["__src__"], test_config, merged)
     return merged
@@ -1151,13 +1152,11 @@ def _print_failed_test(
     print(f"File \"{test.filename}\", line {test.line}")
     print("Failed example:")
     _print_test_expr(test.expr)
-    if test.expected:
-        print("Expected:")
-        _print_test_expected(test.expected, spec)
+    if test.expected and options.get("diff"):
+        _print_test_result_diff(test, result, options, spec)
     else:
-        print("Expected nothing")
-    print("Got:")
-    _print_test_result_output(result.output, options, spec)
+        _print_test_expected(test)
+        _print_test_result_output(result, options, spec)
     if match.reason:
         print(f"Reason:")
         _print_mismatch_reason(match.reason, test)
@@ -1168,13 +1167,45 @@ def _print_test_expr(s: str):
         print("    " + line)
 
 
-def _print_test_expected(s: str, spec: TestSpec):
-    for line in s.split("\n"):
-        print("    " + line)
+def _print_test_result_diff(
+    test: Test,
+    result: TestResult,
+    options: TestOptions,
+    spec: TestSpec,
+):
+    expected_lines, output_lines = _format_lines_for_diff(test, result, options, spec)
+    print("Differences between expected and actual:")
+    for line in _diff_lines(expected_lines, output_lines):
+        print("   " + line)
 
 
-def _print_test_result_output(output: str, options: TestOptions, spec: TestSpec):
-    output = _format_test_result_output(output, options, spec)
+def _format_lines_for_diff(
+    test: Test, result: TestResult, options: TestOptions, spec: TestSpec
+):
+    expected = test.expected
+    output = _format_test_result_output(result.output, options, spec)
+    return (expected.split("\n"), output.split("\n"))
+
+
+def _diff_lines(a: List[str], b: List[str]):
+    diff = difflib.unified_diff(a, b, n=2)
+    diff_no_header = list(diff)[2:]
+    for line in diff_no_header:
+        yield line.rstrip()
+
+
+def _print_test_expected(test: Test):
+    if test.expected:
+        print("Expected:")
+        for line in test.expected.split("\n"):
+            print("    " + line)
+    else:
+        print("Expected nothing")
+
+
+def _print_test_result_output(result: TestResult, options: TestOptions, spec: TestSpec):
+    print("Got:")
+    output = _format_test_result_output(result.output, options, spec)
     for line in output.split("\n"):
         print("    " + line)
 
@@ -1230,8 +1261,7 @@ def _doctest_options(config: TestConfig):
     opts = config.get("options")
     if not opts:
         return 0
-    if not isinstance(opts, str):
-        raise ValueError("doctest test-options must be a string")
+    opts = " ".join(_coerce_list(opts))
     flags = 0
     for opt_flag, enabled in _iter_doctest_opts(opts):
         if enabled:

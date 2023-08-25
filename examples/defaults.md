@@ -58,55 +58,56 @@ output, the evaluated result is included after printed output.
 
 Groktest requires that expected output contain only non-blank lines. To
 represent a blank line in expected output, use a blank line marker.
-Groktest uses the token `|` (pipe character) to represent a blank line.
-This is equivalent to `<BLANKLINE>` in `doctest`.
+Groktest uses the token `⤶` (unicode
+[2936](https://www.compart.com/en/unicode/U+2936)) to represent a blank
+line. This is equivalent to `<BLANKLINE>` in `doctest`.
 
     >>> print("")
-    |
+    ⤶
 
     >>> print("\n")
-    |
-    |
+    ⤶
+    ⤶
 
     >>> print("foo\n")
     foo
-    |
+    ⤶
 
     >>> print("""
     ... foo""")
-    |
+    ⤶
     foo
 
     >>> print("""
     ... foo
     ... """)
-    |
+    ⤶
     foo
-    |
+    ⤶
 
     >>> print("""
     ... foo
     ...
     ... bar
     ... """)
-    |
+    ⤶
     foo
-    |
+    ⤶
     bar
-    |
+    ⤶
 
 Blank lines can be disabled using the `blankline` option.
 
-    >>> print("|")  # -blankline
-    |
+    >>> print("⤶")  # -blankline
+    ⤶
 
 The token used to represent blank lines in outout can be modified when
 enabling the `blankline` option.
 
-    >>> print("|\n\n|")  # +blankline=<BLANKLINE>
-    |
+    >>> print("⤶\n\n⤶")  # +blankline=<BLANKLINE>
+    ⤶
     <BLANKLINE>
-    |
+    ⤶
 
     >>> print("")  # +blankline=xxx
     xxx
