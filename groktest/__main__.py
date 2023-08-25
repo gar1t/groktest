@@ -132,25 +132,28 @@ def _save_last_cmd(args: Any):
 def _try_project_config(args: Any):
     if not args.paths:
         return None
-    for path in _project_candidates(args.paths[0]):
-        if not os.path.isfile(path):
-            continue
-        try:
-            config = load_project_config(path)
-        except ProjectDecodeError as e:
-            log.debug("Error loading project config from %s: %s", path, e)
-        else:
-            if len(args.paths) > 1:
-                raise SystemExit(
-                    f"extra arguments '{' '.join(args.paths[1:])}' to project "
-                    "path not currently supported"
-                )
-            return config
+    project_path = _project_candidate(args.paths[0])
+    if not project_path:
+        return None
+    try:
+        config = load_project_config(project_path)
+    except ProjectDecodeError as e:
+        log.debug("Error loading project config from %s: %s", project_path, e)
+    else:
+        if len(args.paths) > 1:
+            raise SystemExit(
+                f"extra arguments '{' '.join(args.paths[1:])}' to project "
+                "path not currently supported"
+            )
+        return config
+
+
+def _project_candidate(path_arg: str):
+    paths = [path_arg, os.path.join(path_arg, "pyproject.toml")]
+    for path in paths:
+        if path[-5:].lower() == ".toml" and os.path.isfile(path):
+            return path
     return None
-
-
-def _project_candidates(path_arg: str):
-    return (path_arg, os.path.join(path_arg, "pyproject.toml"))
 
 
 def _test_filenames(config: Optional[ProjectConfig], args: Any):

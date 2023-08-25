@@ -1,9 +1,23 @@
 # Groktest To Do
 
-- Ignore exception detail by default and the `???` option to disable
-  that
-- Option based config of parse types (`types.name = <pattern>`)
-- How to support type conversion for parser types?? Do we care?
+- Ignore exception detail by default and `-error-detail` option to
+  disable that?
+
+- `--last-failed` option
+
+- Consider an `any` type or a type that matches non line endings.
+
+- Remove Groktest from stack:
+
+    Traceback (most recent call last):
+      File "/home/garrett/Code/groktest/groktest/python.py", line 241, in _handle_test
+        _exec_test(test, globals)
+      File "/home/garrett/Code/groktest/groktest/python.py", line 284, in _exec_test
+        result = eval(code, globals)
+
+- Platform specific tests (Windows only, etc.)
+- Handle platform specific paths - e.g. a `path` option
+- Custom options??
 
 ## Tags and deps
 
@@ -25,6 +39,7 @@ skipped.
 
 This is how we can implement uat alongside the other tests. E.g. do we
 need to waste time running 'aws' tests if 'core' tests have failed?
+Also, some tests may rely on setup performed by upstream tests.
 
 ## Shell runtime
 

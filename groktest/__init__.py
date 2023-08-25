@@ -21,28 +21,28 @@ from . import _vendor_tomli as toml
 
 __all__ = [
     "DEFAULT_SPEC",
+    "PYTHON_SPEC",
+    "RUNTIME",
     "Error",
-    "init_runner_state",
-    "match_test_output",
-    "parse_tests",
     "ParseTypeFunction",
     "ParseTypeFunctions",
     "ParseTypes",
     "ProjectDecodeError",
-    "PYTHON_SPEC",
     "RunnerState",
     "Runtime",
-    "RUNTIME",
     "RuntimeNotSupported",
     "SPECS",
-    "start_runtime",
-    "test_file",
     "Test",
     "TestMatch",
     "TestMatcher",
     "TestResult",
     "TestSpec",
     "TestTypeNotSupported",
+    "init_runner_state",
+    "match_test_output",
+    "parse_tests",
+    "start_runtime",
+    "test_file",
 ]
 
 log = logging.getLogger("groktest")
@@ -633,13 +633,13 @@ def _coerce_list(x: Any) -> List[Any]:
 
 def _try_test_file_project_config(filename: str):
     for dirname in _iter_parents(filename):
-        filename = os.path.join(dirname, "pyproject.toml")
+        path = os.path.join(dirname, "pyproject.toml")
         try:
-            return load_project_config(filename)
+            return load_project_config(path)
         except FileNotFoundError:
             pass
         except ProjectDecodeError as e:
-            log.warning("Error loading project config from %s: %s", filename, e)
+            log.warning("Error loading project config from %s: %s", path, e)
             break
     return None
 
@@ -925,11 +925,17 @@ def _iter_parse_functions(
     path: List[str],
 ) -> Generator[Tuple[str, ParseTypeFunction], None, None]:
     for spec in specs:
+        log.debug("Loading parse functions from %s", spec)
         module = _try_load_module(spec, path)
         if not module:
             continue
+        found = 0
         for f in _iter_module_parse_functions(module):
+            found += 1
+            log.debug("Found parse function %s", f.__name__)
             yield _parse_type_name(f), f
+        if not found:
+            log.debug("No parse functions found in %s", spec)
 
 
 def _try_load_module(spec: str, path: List[str]):
@@ -969,9 +975,9 @@ def _iter_module_parse_functions(
     module: ModuleType,
 ) -> Generator[ParseTypeFunction, None, None]:
     for name in _module_parse_names(module):
-        maybe_parse = getattr(module, name)
-        if _is_parse_function(maybe_parse):
-            yield maybe_parse
+        x = getattr(module, name)
+        if _is_parse_function(x):
+            yield x
 
 
 def _module_parse_names(module: ModuleType):
@@ -1104,13 +1110,13 @@ def _log_test_result_match(
     state: RunnerState,
 ):
     log.debug("Result for %r", test.expr)
-    log.debug("  match: %s", "yes" if match else "no")
+    log.debug("  match: %s", "yes" if match.match else "no")
     if match.match:
         log.debug("  match vars: %s", match.vars)
     log.debug("  test expected: %r", test.expected)
-    log.debug("  test result: (%r) %r", result.code, result.output)
+    log.debug("  test output: (%r) %r", result.code, result.output)
     log.debug("  used expected: %r", used_expected)
-    log.debug("  used test output: %r", used_test_output)
+    log.debug("  used output: %r", used_test_output)
 
 
 def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
@@ -1279,7 +1285,7 @@ def _load_toml(filename: str):
         except toml.TOMLDecodeError:
             raise
         else:
-            log.debug("using project config in %s", filename)
+            log.debug("Using project config in %s", filename)
             data["__src__"] = filename
             return data
 
