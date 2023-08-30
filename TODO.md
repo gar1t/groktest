@@ -17,7 +17,11 @@
 
 - Platform specific tests (Windows only, etc.)
 - Handle platform specific paths - e.g. a `path` option
-- Custom options??
+- How would someone define/implement a custom options?
+  - Formatting expected/actual
+  - Alternative matching?
+
+- Support KeyboardInterrupt
 
 ## Tags and deps
 

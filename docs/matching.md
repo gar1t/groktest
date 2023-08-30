@@ -14,7 +14,7 @@ String matching is used by default. It's implemented by
     ...     m = str_match0(expected, test_output, options)
     ...     pprint(m.match)
 
-By default matched are exact.
+By default, string matching simply compares two strings.
 
     >>> str_match("", "")
     True
@@ -31,10 +31,29 @@ By default matched are exact.
     >>> str_match("a", "A")
     False
 
-If `case` is disabled, matches are case insensitive.
+### String matching and case
+
+The `case` option determines if a match is case sensitive. By default,
+matches are case sensitive - i.e. `case` is enabled.
+
+    >>> str_match("a", "A")
+    False
+
+When `case` is disabled, matching is case insensitive.
 
     >>> str_match("a", "A", {"case": False})
     True
+
+    >>> str_match(
+    ...     "The quick brown fox",
+    ...     "THE qUicK BroWN fOX",
+    ...    {"case": False}
+    ... )
+    True
+
+### String matching and white space
+
+### String matching and wildcards
 
 If `wildcard` is specified, the specified token is used to match any
 output up to the output following the wildcard.
@@ -216,3 +235,9 @@ need to be stripped.
 
     >>> parse_match("a b", "\na b\n".strip())
     {}
+
+### Parse matching and case
+
+### Parse matching and white space
+
+### Parse matching and error detail

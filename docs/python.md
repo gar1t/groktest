@@ -66,7 +66,6 @@ Various tests:
 
     >>> run_test(">>> 1 / 0")
     Traceback (most recent call last):
-      ...
       File "<test>", line 1, in <module>
     ZeroDivisionError: division by zero
     <BLANKLINE>
@@ -103,7 +102,7 @@ Note that `msg`, which we defined for the runtime using
     >>> run_test(">>> print(msg)")
     Hi!
     <BLANKLINE>
-    
+
 Stop the runtime.
 
     >>> python.stop()

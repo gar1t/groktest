@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import pprint
+import re
 import signal
 import subprocess
 import sys
@@ -26,35 +27,35 @@ from .__init__ import TestConfig
 from .__init__ import TestMatch
 from .__init__ import TestOptions
 from .__init__ import TestResult
-from .__init__ import TestSpec
 
 log = logging.getLogger("groktest.python")
 
 
-class Init:
+class InitReq:
     def __init__(self, expr: str):
         self.expr = expr
 
 
-class TestExpr:
+class TestReq:
     def __init__(
         self,
         expr: str,
         filename: Optional[str],
+        line: Optional[int],
         options: Optional[TestOptions],
     ):
         self.expr = expr
         self.filename = filename
+        self.line = line
         self.options = options or {}
 
 
-class Vars:
+class VarsReq:
     def __init__(self, vars: Dict[str, Any]):
         self.vars = vars
 
 
 class PythonRuntime(Runtime):
-    config: Optional[TestSpec] = None
     _p: Optional[subprocess.Popen[str]] = None
 
     def start(self, config: Optional[TestConfig] = None):
@@ -175,6 +176,7 @@ def _write_test_exec_req(test: Test, options: TestOptions, out: IO[str]):
             "type": "test",
             "expr": test.expr,
             "filename": test.filename,
+            "line": test.line,
             "options": options,
         }
     )
@@ -204,11 +206,11 @@ def _main_loop():
         if not line:
             break
         req = _decode_request(line)
-        if isinstance(req, TestExpr):
+        if isinstance(req, TestReq):
             _handle_test(req, globals)
-        elif isinstance(req, Vars):
+        elif isinstance(req, VarsReq):
             _handle_vars(req, globals)
-        elif isinstance(req, Init):
+        elif isinstance(req, InitReq):
             _handle_init(req, globals)
         else:
             assert False, req
@@ -221,39 +223,40 @@ def _readline():
 def _decode_request(line: str):
     data = json.loads(line)
     if data["type"] == "test":
-        return TestExpr(
+        return TestReq(
             expr=data["expr"],
             filename=data.get("filename"),
+            line=data.get("line"),
             options=data.get("options"),
         )
     elif data["type"] == "vars":
-        return Vars(data["vars"])
+        return VarsReq(data["vars"])
     elif data["type"] == "init":
-        return Init(data["expr"])
+        return InitReq(data["expr"])
     else:
         assert False, data
 
 
-def _handle_test(test: TestExpr, globals: Dict[str, Any]):
+def _handle_test(test: TestReq, globals: Dict[str, Any]):
     _log_test(test)
     with _StdOutCapture() as out:
         try:
             _exec_test(test, globals)
         except:
-            error = sys.exc_info()
+            exc_info = sys.exc_info()
         else:
-            error = None
-    _handle_test_result(out.getvalue(), error)
+            exc_info = None
+    _handle_test_result(out.getvalue(), exc_info, test)
 
 
-def _log_test(test: TestExpr):
+def _log_test(test: TestReq):
     log.debug("Running Python test expr:")
     log.debug(textwrap.indent(test.expr, "  "))
 
 
-def _handle_test_result(output: str, exc_info: Any):
+def _handle_test_result(output: str, exc_info: Any, test: TestReq):
     _log_test_result(output, exc_info)
-    _writeline(_encode_test_result(output, exc_info))
+    _writeline(_encode_test_result(output, exc_info, test))
 
 
 def _log_test_result(output: str, exc_info: Any):
@@ -278,7 +281,7 @@ class _StdOutCapture(io.StringIO):
         self._real_stdout = None
 
 
-def _exec_test(test: TestExpr, globals: Dict[str, Any]):
+def _exec_test(test: TestReq, globals: Dict[str, Any]):
     _apply_test_globals_effect(test, globals)
     code = _compile_test_expr(test)
     result = eval(code, globals)
@@ -291,7 +294,7 @@ def _maybe_pretty_print_result(result: Any, options: TestOptions):
     pprint.pprint(result, width=72)
 
 
-def _compile_test_expr(test: TestExpr):
+def _compile_test_expr(test: TestReq):
     """Returns compiled test expression.
 
     Tries to compile using 'eval' mode if test is configured for pretty
@@ -311,35 +314,98 @@ def _compile_test_expr(test: TestExpr):
         return _gen_compile_test_expr("single", test)
 
 
-def _gen_compile_test_expr(mode: str, test: TestExpr):
+def _gen_compile_test_expr(mode: str, test: TestReq):
     return compile(
-        test.expr,
-        test.filename or "<test>",
+        _format_test_sourcecode(test),
+        _test_filename(test),
         mode,
         dont_inherit=True,
     )
 
 
-def _apply_test_globals_effect(test: TestExpr, globals: Dict[str, Any]):
+def _format_test_sourcecode(test: TestReq):
+    """Returns test expression source code suitable for compile.
+
+    Preppends empty lines to affect test source code line. In tracebacks
+    we want to refer to the test source code file (filename) and the
+    correct line number in that file. Empty lines is a convenient way to
+    offset the line number accordingly.
+    """
+    if not test.filename or not test.line:
+        return test.expr
+    return "\n" * (test.line - 1) + test.expr
+
+
+def _test_filename(test: TestReq):
+    return test.filename if test.filename else "<test>"
+
+
+def _apply_test_globals_effect(test: TestReq, globals: Dict[str, Any]):
     globals["__name__"] = (
         os.path.basename(test.filename) if test.filename else "__test__"
     )
     globals["__file__"] = test.filename or "__test__"
 
 
-def _encode_test_result(output: str, exc_info: Any):
+def _encode_test_result(output: str, exc_info: Any, test: TestReq):
     return json.dumps(
         {
             "code": 0 if exc_info is None else 1,
-            "output": output if exc_info is None else _format_exc_info(exc_info),
+            "output": output if exc_info is None else _format_exc_info(exc_info, test),
         }
     )
 
 
-def _format_exc_info(exc_info: Any):
+def _format_exc_info(exc_info: Any, test: Optional[TestReq] = None):
     out = io.StringIO()
     traceback.print_exception(*exc_info, file=out)
-    return out.getvalue()
+    tb = out.getvalue()
+    if not test:
+        return tb
+    if test.options.get("error-detail") is False:
+        return _strip_error_detail(tb)
+    return _strip_doctest_prompts(_strip_internal_calls(tb), test)
+
+
+def _strip_error_detail(tb: str):
+    lines = tb.split("\n")
+    assert len(lines) >= 3 and lines[-1] == "", tb
+    return "\n".join([lines[0]] + lines[-2:])
+
+
+_FILE_SOURCECODE_PATTERN = re.compile(r"(?m)( +File \"(.+)\", line \d+, in .+\n)(.+\n)")
+
+
+def _strip_doctest_prompts(tb: str, test: Optional[TestReq]):
+    if not test or not test.filename:
+        return tb
+    parts = []
+    charpos = 0
+    for m in _FILE_SOURCECODE_PATTERN.finditer(tb):
+        parts.append(tb[charpos : m.start()])
+        filename_line, filename, sourcecode = m.groups()
+        parts.append(filename_line)
+        parts.append(
+            _strip_prompt(sourcecode) if filename == test.filename else sourcecode
+        )
+        charpos = m.end()
+    parts.append(tb[charpos:])
+    return "".join(parts)
+
+
+def _strip_prompt(s: str):
+    m = re.match(r"( +)([^ ]+ )(.*\n)", s)
+    if not m:
+        return s
+    return m.group(1) + m.group(3)
+
+
+def _strip_internal_calls(tb: str):
+    lines = tb.split("\n")
+    header = lines[0]
+    stripped_lines = lines[5:]
+    assert stripped_lines and stripped_lines[0].endswith(" <module>"), lines
+    return "\n".join([header] + stripped_lines)
 
 
 def _writeline(line: str):
@@ -348,17 +414,17 @@ def _writeline(line: str):
     sys.stdout.flush()
 
 
-def _handle_vars(vars: Vars, globals: Dict[str, Any]):
+def _handle_vars(vars: VarsReq, globals: Dict[str, Any]):
     _log_vars(vars)
     globals.update(vars.vars)
     _writeline(_encode_ack())
 
 
-def _log_vars(vars: Vars):
+def _log_vars(vars: VarsReq):
     log.debug("Updating variables: %r", vars.vars)
 
 
-def _handle_init(init: Init, globals: Dict[str, Any]):
+def _handle_init(init: InitReq, globals: Dict[str, Any]):
     _log_init(init)
     globals.clear()
     try:
@@ -368,7 +434,7 @@ def _handle_init(init: Init, globals: Dict[str, Any]):
     _writeline(_encode_ack())
 
 
-def _log_init(init: Init):
+def _log_init(init: InitReq):
     log.debug("Initializing Python runtime")
     log.debug(textwrap.indent(init.expr, "  "))
 

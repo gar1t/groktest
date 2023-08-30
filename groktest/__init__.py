@@ -204,6 +204,7 @@ class RunnerState:
         self.filename = filename
         self.config = config
         self.results: Dict[str, Any] = {"failed": 0, "tested": 0, "skipped": 0}
+        self.skip_rest = False
 
 
 class DocTestRunnerState:
@@ -279,6 +280,11 @@ def init_runner_state(filename: str, project_config: Optional[ProjectConfig] = N
     runtime = start_runtime(spec.runtime, test_config)
     tests = parse_tests(contents, spec, filename)
     return RunnerState(tests, runtime, spec, test_config, filename)
+
+
+def init_test_runner_state(spec: TestSpec, filename: Optional[str] = None):
+    runtime = start_runtime(spec.runtime)
+    return RunnerState([], runtime, spec, {}, filename or "<test>")
 
 
 def _read_file(filename: str):
@@ -679,16 +685,19 @@ def test_file(filename: str, config: Optional[ProjectConfig] = None):
     state.runtime.init_for_tests(state.config)
     _apply_skip_for_solo(state.tests)
     with RuntimeScope(state.runtime):
-        skiprest = False
         for test in state.tests:
-            options = _test_options(test, state.config, state.spec)
-            skiprest = _skiprest(options, skiprest)
-            if _skip_test(options, skiprest):
+            test_options = _test_options(test, state.config, state.spec)
+            _apply_skip_rest(test_options, state)
+            if _skip_test(test_options, state):
                 _handle_test_skipped(test, state)
             else:
-                result = state.runtime.exec_test_expr(test, options)
-                _handle_test_result(result, test, options, state)
+                run_test(test, test_options, state)
         return state.results
+
+
+def run_test(test: Test, options: TestOptions, state: RunnerState):
+    result = state.runtime.exec_test_expr(test, options)
+    _handle_test_result(result, test, options, state)
 
 
 def _apply_skip_for_solo(tests: List[Test]):
@@ -699,12 +708,12 @@ def _apply_skip_for_solo(tests: List[Test]):
         test.options["skip"] = test not in solo_tests
 
 
-def _skiprest(options: TestOptions, skiprest: bool):
-    return _option_value("skiprest", options, skiprest)
+def _apply_skip_rest(options: TestOptions, state: RunnerState):
+    state.skip_rest = _option_value("skiprest", options, state.skip_rest)
 
 
-def _skip_test(options: TestOptions, skiprest: bool):
-    return _option_value("skip", options, skiprest)
+def _skip_test(options: TestOptions, state: RunnerState):
+    return _option_value("skip", options, state.skip_rest)
 
 
 def _handle_test_skipped(test: Test, state: RunnerState):
@@ -719,22 +728,18 @@ def _handle_test_result(
     match = match_test_output(expected, test_output, test, state.config, state.spec)
     _log_test_result_match(match, result, test, expected, test_output, state)
     if options.get("fails"):
-        _handle_expect_fails(match, test, state)
+        if match.match:
+            _handle_unexpected_test_pass(test, options, state)
+        else:
+            _handle_expected_test_failed(test, state)
     elif match.match:
         _handle_test_passed(test, match, state)
     else:
         _handle_test_failed(test, match, result, options, state)
 
 
-def _handle_expect_fails(match: TestMatch, test: Test, state: RunnerState):
-    if match.match:
-        _handle_unexpected_test_pass(test, state)
-    else:
-        _handle_expected_test_failed(test, state)
-
-
-def _handle_unexpected_test_pass(test: Test, state: RunnerState):
-    _print_failed_test_sep()
+def _handle_unexpected_test_pass(test: Test, options: TestOptions, state: RunnerState):
+    _print_failed_test_sep(options)
     print(f"File \"{test.filename}\", line {test.line}")
     print("Failed example:")
     _print_test_expr(test.expr)
@@ -767,7 +772,7 @@ def _maybe_remove_blankline_markers(s: str, options: TestOptions, spec: TestSpec
 
 def _blankline_marker(options: TestOptions, spec: TestSpec):
     opt_val = options.get("blankline")
-    if opt_val is None:
+    if opt_val is None or opt_val is True:
         return spec.blankline
     if not opt_val:
         return None
@@ -1132,14 +1137,18 @@ def _handle_test_failed(
     options: TestOptions,
     state: RunnerState,
 ):
-    _print_failed_test_sep()
+    _print_failed_test_sep(options)
     _print_failed_test(test, match, result, options, state.spec)
     state.results["failed"] += 1
     state.results["tested"] += 1
 
 
-def _print_failed_test_sep():
-    print("**********************************************************************")
+def _print_failed_test_sep(options: TestOptions):
+    sep = options.get("sep")
+    if sep is True:
+        print("**********************************************************************")
+    elif sep:
+        print(sep)
 
 
 def _print_failed_test(
@@ -1162,8 +1171,9 @@ def _print_failed_test(
         _print_mismatch_reason(match.reason, test)
 
 
-def _print_test_expr(s: str):
-    for line in s.split("\n"):
+def _print_test_expr(expr: str):
+    expr = expr.strip()
+    for line in expr.split("\n"):
         print("    " + line)
 
 
@@ -1197,10 +1207,15 @@ def _diff_lines(a: List[str], b: List[str]):
 def _print_test_expected(test: Test):
     if test.expected:
         print("Expected:")
-        for line in test.expected.split("\n"):
+        expected = _format_test_result_expected(test.expected)
+        for line in expected.split("\n"):
             print("    " + line)
     else:
         print("Expected nothing")
+
+
+def _format_test_result_expected(expected: str):
+    return expected.strip()
 
 
 def _print_test_result_output(result: TestResult, options: TestOptions, spec: TestSpec):
