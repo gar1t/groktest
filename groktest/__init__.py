@@ -1219,10 +1219,13 @@ def _format_test_result_expected(expected: str):
 
 
 def _print_test_result_output(result: TestResult, options: TestOptions, spec: TestSpec):
-    print("Got:")
-    output = _format_test_result_output(result.output, options, spec)
-    for line in output.split("\n"):
-        print("    " + line)
+    if result.output:
+        print("Got:")
+        output = _format_test_result_output(result.output, options, spec)
+        for line in output.split("\n"):
+            print("    " + line)
+    else:
+        print("Got nothing")
 
 
 def _format_test_result_output(output: str, options: TestOptions, spec: TestSpec):

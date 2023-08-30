@@ -85,6 +85,25 @@ Diff mode shows a unified diff of expected and actual.
        -2
        +1
 
+When either expected or actual output is unspecified, the report states
+that it expected or got "nothing" respectively.
+
+    >>> test("None", "2")
+    File "<test>", line 1
+    Failed example:
+        None
+    Expected:
+        2
+    Got nothing
+
+    >>> test("1", "")
+    File "<test>", line 1
+    Failed example:
+        1
+    Expected nothing
+    Got:
+        1
+
 ## Blank lines
 
 Blank lines present a special case in Groktest. Expected output is

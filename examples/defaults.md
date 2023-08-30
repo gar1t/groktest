@@ -15,6 +15,9 @@ Python expression.
     >>> 1
     1
 
+    >>> None
+    123
+
 If the evaluated expression is something other than `None`, Groktest
 expects the string representation of that value as output. Expected
 output must be specified on a line immediately following the test
