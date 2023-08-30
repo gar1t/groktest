@@ -46,3 +46,11 @@ Other examples:
     ValueError: a
     b
     c
+
+Exception values that contain indented lines are displayed correctly.
+
+    >>> raise ValueError("a\n  b\nc")
+    Traceback (most recent call last):
+    ValueError: a
+      b
+    c

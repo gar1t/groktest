@@ -23,6 +23,8 @@
 
 - Support KeyboardInterrupt
 
+- Apply `--last` to a project (savefile is per project)
+
 ## Tags and deps
 
 Tags per test in front-matter.

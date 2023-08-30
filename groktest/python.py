@@ -368,9 +368,13 @@ def _format_exc_info(exc_info: Any, test: Optional[TestReq] = None):
 
 
 def _strip_error_detail(tb: str):
-    lines = tb.split("\n")
-    stripped = [line for line in lines if not line or line[0] != " "]
-    return "\n".join(stripped)
+    parts = []
+    charpos = 0
+    for m in _FILE_SOURCECODE_PATTERN.finditer(tb):
+        parts.append(tb[charpos : m.start()])
+        charpos = m.end()
+    parts.append(tb[charpos:])
+    return "".join(parts)
 
 
 _FILE_SOURCECODE_PATTERN = re.compile(r"(?m)( +File \"(.+)\", line \d+, in .+\n)(.+\n)")

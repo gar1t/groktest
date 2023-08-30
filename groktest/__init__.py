@@ -1145,7 +1145,7 @@ def _handle_test_failed(
 
 def _print_failed_test_sep(options: TestOptions):
     sep = options.get("sep")
-    if sep is True:
+    if sep is True or sep is None:
         print("**********************************************************************")
     elif sep:
         print(sep)
