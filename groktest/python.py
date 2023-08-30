@@ -185,7 +185,7 @@ def _write_test_exec_req(test: Test, options: TestOptions, out: IO[str]):
 
 def _read_test_result(input: IO[str]):
     resp = json.loads(input.readline())
-    return TestResult(resp["code"], resp["output"])
+    return TestResult(resp["code"], resp["output"], resp.get("short-error"))
 
 
 def _update_vars(vars: Dict[str, Any], proc: Popen[str]):
@@ -348,22 +348,40 @@ def _apply_test_globals_effect(test: TestReq, globals: Dict[str, Any]):
 
 
 def _encode_test_result(output: str, exc_info: Any, test: TestReq):
-    return json.dumps(
-        {
-            "code": 0 if exc_info is None else 1,
-            "output": output if exc_info is None else _format_exc_info(exc_info, test),
-        }
-    )
+    if exc_info:
+        output, short_error = _format_error_output(exc_info, test)
+        code = 1
+    else:
+        short_error = None
+        code = 0
+    return json.dumps({"code": code, "output": output, "short-error": short_error})
 
 
-def _format_exc_info(exc_info: Any, test: Optional[TestReq] = None):
+def _format_error_output(exc_info: Any, test: Optional[TestReq] = None):
+    """Returns a tuple of full error and short error.
+
+    Full error is a formatted traceback with two adjustments:
+
+      - Internal calls (i.e. calls from this module) are removed
+      - Doc test prompts (PS1 and PS2) are stripped from error source
+        code originating from the test file
+
+    Short error is contains only the traceback header and the exception
+    name - call stack details are removed.
+    """
+    formatted = _format_exc_info(exc_info)
+    full_error = _format_full_error(formatted, test)
+    short_error = _strip_error_detail(formatted)
+    return full_error, short_error
+
+
+def _format_exc_info(exc_info: Any):
     out = io.StringIO()
     traceback.print_exception(*exc_info, file=out)
-    tb = out.getvalue()
-    if not test:
-        return tb
-    if not test.options.get("error-detail"):
-        return _strip_error_detail(tb)
+    return out.getvalue()
+
+
+def _format_full_error(tb: str, test: Optional[TestReq]):
     return _strip_doctest_prompts(_strip_internal_calls(tb), test)
 
 

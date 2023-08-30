@@ -149,9 +149,10 @@ class Test:
 
 
 class TestResult:
-    def __init__(self, code: int, output: str):
+    def __init__(self, code: int, output: str, short_error: Optional[str] = None):
         self.code = code
         self.output = output
+        self.short_error = short_error
 
 
 class Runtime:
@@ -724,9 +725,8 @@ def _handle_test_result(
     result: TestResult, test: Test, options: TestOptions, state: RunnerState
 ):
     expected = _format_match_expected(test, options, state.spec)
-    test_output = _format_match_test_output(result, test, options, state.spec)
-    match = match_test_output(expected, test_output, test, state.config, state.spec)
-    _log_test_result_match(match, result, test, expected, test_output, state)
+    output_candidates = _match_test_output_candidates(result, test, options)
+    match = _try_match_output_candidates(output_candidates, expected, test, state)
     if options.get("fails"):
         if match.match:
             _handle_unexpected_test_pass(test, options, state)
@@ -736,6 +736,19 @@ def _handle_test_result(
         _handle_test_passed(test, match, state)
     else:
         _handle_test_failed(test, match, result, options, state)
+
+
+def _try_match_output_candidates(
+    output_candidates: List[str], expected: str, test: Test, state: RunnerState
+):
+    assert output_candidates
+    match = None
+    for output in output_candidates:
+        match = match_test_output(expected, output, test, state.config, state.spec)
+        if match.match:
+            return match
+    assert match
+    return match
 
 
 def _handle_unexpected_test_pass(test: Test, options: TestOptions, state: RunnerState):
@@ -794,12 +807,22 @@ def _normalize_whitespace(s: str):
     return " ".join(s.split())
 
 
-def _format_match_test_output(
-    result: TestResult, test: Test, options: TestOptions, spec: TestSpec
-):
-    output = _truncate_empty_line_spaces(result.output)
-    output = _maybe_normalize_whitespace(output, options)
-    return output
+def _match_test_output_candidates(result: TestResult, test: Test, options: TestOptions):
+    output = _format_test_output(result.output, options)
+    short_error = _maybe_short_error(result, options)
+    if short_error:
+        return [output, _format_test_output(short_error, options)]
+    return [output]
+
+
+def _format_test_output(output: str, options: TestOptions):
+    return _maybe_normalize_whitespace(_truncate_empty_line_spaces(output), options)
+
+
+def _maybe_short_error(result: TestResult, options: TestOptions):
+    if result.short_error and not _option_value("error-detail", options, False):
+        return result.short_error
+    return result.output
 
 
 def _truncate_empty_line_spaces(s: str):
@@ -900,7 +923,9 @@ def _option_value(name: str, options: Dict[str, Any], default: Any):
     except KeyError:
         return default
     else:
-        return default if val is None else val
+        if val is None:
+            return default
+        return val
 
 
 def _parselib_types(config: TestConfig) -> ParseTypeFunctions:

@@ -21,6 +21,7 @@ parse_ver.regex_group_count = 3
 def parse_upper(s: str):
     return s.upper()
 
+
 # Groktest specific attr `type_name` to configure name
 parse_upper.type_name = "loud"
 

@@ -36,6 +36,9 @@ for parsing.
     ...     result = python.exec_test_expr(tests[0], options or {})
     ...     assert result.code in (0, 1), result.code
     ...     print(result.output)
+    ...     if result.short_error:
+    ...         print("----short error----")
+    ...         print(result.short_error)
 
 Various tests:
 
@@ -64,14 +67,16 @@ Various tests:
     <BLANKLINE>
     <BLANKLINE>
 
+The Python runtime provides `short_error` in the case of an exception.
+This can be used to match as an alternative to the full output.
+
     >>> run_test(">>> 1 / 0")
     Traceback (most recent call last):
+      File "<test>", line 1, in <module>
     ZeroDivisionError: division by zero
     <BLANKLINE>
-
-    >>> run_test(">>> 1 / 0", {"error-detail": True})
+    ----short error----
     Traceback (most recent call last):
-      File "<test>", line 1, in <module>
     ZeroDivisionError: division by zero
     <BLANKLINE>
 
