@@ -66,6 +66,11 @@ Various tests:
 
     >>> run_test(">>> 1 / 0")
     Traceback (most recent call last):
+    ZeroDivisionError: division by zero
+    <BLANKLINE>
+
+    >>> run_test(">>> 1 / 0", {"error-detail": True})
+    Traceback (most recent call last):
       File "<test>", line 1, in <module>
     ZeroDivisionError: division by zero
     <BLANKLINE>

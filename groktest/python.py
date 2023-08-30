@@ -362,7 +362,7 @@ def _format_exc_info(exc_info: Any, test: Optional[TestReq] = None):
     tb = out.getvalue()
     if not test:
         return tb
-    if test.options.get("error-detail") is False:
+    if not test.options.get("error-detail"):
         return _strip_error_detail(tb)
     return _strip_doctest_prompts(_strip_internal_calls(tb), test)
 

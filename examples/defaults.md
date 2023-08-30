@@ -155,9 +155,8 @@ Matched patterns can be bound to variables.
 
     >>> assert x + y == z, (x, y, z)
 
-    >>> assert x + y != z, (x, y, z)  # +wildcard
+    >>> assert x + y != z, (x, y, z)
     Traceback (most recent call last):
-    ...
     AssertionError: (1, 1, 2)
 
 ## Case sensitive matching
