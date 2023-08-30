@@ -426,11 +426,14 @@ def _strip_prompt(s: str):
 
 
 def _strip_internal_calls(tb: str):
-    lines = tb.split("\n")
-    header = lines[0]
-    stripped_lines = lines[5:]
-    assert stripped_lines and stripped_lines[0].endswith(" <module>"), lines
-    return "\n".join([header] + stripped_lines)
+    parts = []
+    charpos = 0
+    for m in _FILE_SOURCECODE_PATTERN.finditer(tb):
+        parts.append(tb[charpos : m.start()])
+        filename_line, filename, sourcecode = m.groups()
+        charpos = m.end() if filename == __file__ else m.start()
+    parts.append(tb[charpos:])
+    return "".join(parts)
 
 
 def _writeline(line: str):
