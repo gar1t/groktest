@@ -23,6 +23,20 @@ Groktest doesn't apply special handling for errors in the way that
     Traceback (most recent call last):
     ZeroDivisionError: division by zero
 
+    >>> raise ValueError("a\nb\nc")
+    Traceback (most recent call last):
+    ValueError: a
+    b
+    c
+
+    >>> raise ValueError("a\nb\nc")  # +error-detail +wildcard
+    Traceback (most recent call last):
+      File ".../examples/errors.md", line 32, in <module>
+        raise ValueError("a\nb\nc")  # +error-detail +wildcard
+    ValueError: a
+    b
+    c
+
 
 Problems:
 
