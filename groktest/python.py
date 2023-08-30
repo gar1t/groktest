@@ -250,16 +250,20 @@ def _handle_test(test: TestReq, globals: Dict[str, Any]):
 
 
 def _log_test(test: TestReq):
+    if test.options.get("debug") is False:
+        return
     log.debug("Running Python test expr:")
     log.debug(textwrap.indent(test.expr, "  "))
 
 
 def _handle_test_result(output: str, exc_info: Any, test: TestReq):
-    _log_test_result(output, exc_info)
+    _log_test_result(test, output, exc_info)
     _writeline(_encode_test_result(output, exc_info, test))
 
 
-def _log_test_result(output: str, exc_info: Any):
+def _log_test_result(test: TestReq, output: str, exc_info: Any):
+    if test.options.get("debug") is False:
+        return
     log.debug("Test result:")
     log.debug(textwrap.indent(output, "  "))
     if exc_info and log.getEffectiveLevel() <= logging.DEBUG:
