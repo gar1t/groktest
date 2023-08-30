@@ -377,7 +377,9 @@ def _strip_error_detail(tb: str):
     return "".join(parts)
 
 
-_FILE_SOURCECODE_PATTERN = re.compile(r"(?m)( +File \"(.+)\", line \d+, in .+\n)(.+\n)")
+_FILE_SOURCECODE_PATTERN = re.compile(
+    r"(?m)( +File \"(.+)\", line \d+, in .+\n)( +.+\n)?"
+)
 
 
 def _strip_doctest_prompts(tb: str, test: Optional[TestReq]):
@@ -389,9 +391,10 @@ def _strip_doctest_prompts(tb: str, test: Optional[TestReq]):
         parts.append(tb[charpos : m.start()])
         filename_line, filename, sourcecode = m.groups()
         parts.append(filename_line)
-        parts.append(
-            _strip_prompt(sourcecode) if filename == test.filename else sourcecode
-        )
+        if sourcecode is not None:
+            parts.append(
+                _strip_prompt(sourcecode) if filename == test.filename else sourcecode
+            )
         charpos = m.end()
     parts.append(tb[charpos:])
     return "".join(parts)

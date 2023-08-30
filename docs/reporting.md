@@ -29,8 +29,9 @@ Function to test an example and print a result.
 
     >>> def test(expr, expected, options=None, lineno=1):
     ...     from groktest import Test, run_test
+    ...     options = options or {}
     ...     test = Test(expr, expected, "<test>", lineno, {})
-    ...     run_test(test, options or {}, state)
+    ...     run_test(test, {**options, "sep": False}, state)
 
 ## Passing tests
 

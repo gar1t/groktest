@@ -34,7 +34,7 @@ for parsing.
     ...     tests = parse_tests(s, PYTHON_SPEC, "<test>")
     ...     assert len(tests) == 1
     ...     result = python.exec_test_expr(tests[0], options or {})
-    ...     assert result.code in (0, 1), (result.code, result.output)
+    ...     assert result.code in (0, 1), result.code
     ...     print(result.output)
 
 Various tests:
