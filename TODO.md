@@ -25,6 +25,8 @@
 
 - Apply `--last` to a project (savefile is per project)
 
+- Support debugging (i.e. calls to `breakpoint()` should work!)
+
 ## Tags and deps
 
 Tags per test in front-matter.
