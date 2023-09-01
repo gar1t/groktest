@@ -76,13 +76,13 @@ enabled or disabled, When enabled, an option may have a value.
   The wildcard can be configured for all tests in a test file using the
   file front matter.
 
-- `whitespace`
+- `space`
 
   Consider whitespace when comparing expected and test output. Enabled
   by default.
 
   To disregard whitespace in matches, disable the option using
-  `-whitespace`.
+  `-space`.
 
 - `paths` (NOT YET IMPLEMENTED)
 
@@ -191,5 +191,5 @@ Typical configuration examples:
     >>> parse("+wildcard -case")
     {'case': False, 'wildcard': True}
 
-    >>> parse("+wildcard=* -whitespace")
-    {'whitespace': False, 'wildcard': '*'}
+    >>> parse("+wildcard=* -space")
+    {'space': False, 'wildcard': '*'}

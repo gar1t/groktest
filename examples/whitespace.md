@@ -6,8 +6,8 @@ White space is checked by default.
     a
     b
 
-White space can be normalized by disabling the `whitespace` option.
+White space can be normalized by disabling the `space` option.
 
-    >>> print("a b")  # -whitespace
+    >>> print("a b")  # -space
     a
     b

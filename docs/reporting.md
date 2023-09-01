@@ -180,7 +180,7 @@ The following options affect error reports in this way:
 - `parse`
 - `wildcard`
 - `case`
-- `whitespace`
+- `space`
 
 ### Parse
 

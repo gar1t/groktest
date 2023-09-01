@@ -805,7 +805,7 @@ def _remove_blankline_markers(s: str, marker: str):
 
 
 def _maybe_normalize_whitespace(s: str, options: TestOptions):
-    keep_whitespace = _option_value("whitespace", options, True)
+    keep_whitespace = _option_value("space", options, True)
     if keep_whitespace:
         return s
     return _normalize_whitespace(s)
@@ -1072,7 +1072,7 @@ def str_match(
 
 
 def _apply_transform_options(expected: str, test_output: str, options: TestOptions):
-    for f in [_apply_case_option, _apply_whitespace_option]:
+    for f in [_apply_case_option]:
         expected, test_output = f(expected, test_output, options)
     return expected, test_output
 
@@ -1081,11 +1081,6 @@ def _apply_case_option(expected: str, test_output: str, options: TestOptions):
     if _option_value("case", options, True):
         return expected, test_output
     return expected.lower(), test_output.lower()
-
-
-def _apply_whitespace_option(expected: str, test_output: str, options: TestOptions):
-    # TODO
-    return expected, test_output
 
 
 def _wildcard_match(

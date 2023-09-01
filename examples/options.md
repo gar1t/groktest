@@ -1,5 +1,5 @@
 ---
-test-options: +wildcard +blankline=. -case -whitespace
+test-options: +wildcard +blankline=. -case -space
 ---
 
 Wildcard matching is enabled in front matter above.
@@ -72,6 +72,6 @@ It can be re-enabled per test.
     >>> print("""
     ... This spans
     ... some
-    ... lines""")  # +whitespace +fails
+    ... lines""")  # +space +fails
     This spans some
     lines
