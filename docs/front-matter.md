@@ -96,10 +96,10 @@ string.
 Missing front matter:
 
     >>> fm("")
-    {}
+    {'__src__': '<test>'}
 
     >>> fm("Nothing to see here")
-    {}
+    {'__src__': '<test>'}
 
 Groktest does not consider Markdown "comments" as 'empty lines'.
 
@@ -109,7 +109,7 @@ Groktest does not consider Markdown "comments" as 'empty lines'.
     ... foo: 123 # Not parsed as Groktest front matter
     ... ---
     ... """)
-    {}
+    {'__src__': '<test>'}
 
 Simple YAML:
 

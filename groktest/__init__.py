@@ -9,12 +9,14 @@ import configparser
 import copy
 import difflib
 import importlib
+import importlib.util
 import inspect
 import io
 import json
 import logging
 import os
 import re
+import sys
 import tokenize
 
 from . import _vendor_parse as parselib
@@ -295,7 +297,7 @@ def _read_file(filename: str):
 _FRONT_MATTER_P = re.compile(r"\s*^---\n(.*)\n---\n?$", re.MULTILINE | re.DOTALL)
 
 
-def _parse_front_matter(s: str, filename: str) -> FrontMatter:
+def _parse_front_matter(s: str, filename: str):
     """Parse front matter from string.
 
     Front matter can be defined using YAML, JSON, or INI.
@@ -306,24 +308,53 @@ def _parse_front_matter(s: str, filename: str) -> FrontMatter:
     this case, front matter configuration is limited to simple key value
     pairs using `<key>: <value>` syntax.
     """
-    m = _FRONT_MATTER_P.match(s)
-    if not m:
-        return {}
-    fm = m.group(1)
-    data = (
-        _try_parse_full_yaml(fm, filename)
-        or _try_parse_json(fm, filename)
-        or _try_parse_toml(fm, filename)
-        or _try_parse_simplified_yaml(fm, filename)
-        or _empty_front_matter(filename)
-    )
+    data = _parsed_front_matter(s, filename) or _empty_front_matter(filename)
     data["__src__"] = filename
     return data
+
+
+def _parsed_front_matter(s: str, filename: str):
+    m = _FRONT_MATTER_P.match(s)
+    if not m:
+        return None
+    fm = m.group(1)
+    return (
+        _try_parse_json(fm, filename)
+        or _try_parse_toml(fm, filename)
+        or _try_parse_full_yaml(fm, filename)
+        or _try_parse_simplified_yaml(fm, filename)
+    )
 
 
 def _empty_front_matter(filename: str):
     log.debug("Missing or unparseable front matter for %s", filename)
     return cast(FrontMatter, {})
+
+
+def _try_parse_json(s: str, filename: str, raise_error: bool = False):
+    try:
+        data = json.loads(s)
+    except Exception as e:
+        if raise_error:
+            raise
+        log.debug("ERROR parsing JSON for %s: %s", filename, e)
+        return None
+    else:
+        log.debug("Parsed JSON for %s: %r", filename, data)
+        return cast(FrontMatter, data)
+
+
+def _try_parse_toml(s: str, filename: str, raise_error: bool = False):
+    try:
+        data = toml.loads(s)
+    except toml.TOMLDecodeError as e:
+        if raise_error:
+            raise
+        log.debug("ERROR parsing TOML front matter for %s: %s", filename, e)
+        return None
+    else:
+        log.debug("Parsed TOML front matter for %s: %r", filename, data)
+        return cast(FrontMatter, data)
 
 
 def _try_parse_full_yaml(s: str, filename: str, raise_error: bool = False):
@@ -343,40 +374,17 @@ def _try_parse_full_yaml(s: str, filename: str, raise_error: bool = False):
         return None
     else:
         log.debug("Parsed YAML front matter  for %s: %r", filename, data)
+        if not isinstance(data, dict):
+            log.warning(
+                "Unsupported front-matter in %s: expected mapping, got %s",
+                filename,
+                type(data).__name__,
+            )
+            return None
         return cast(FrontMatter, data)
 
 
-def _try_parse_json(s: str, filename: str, raise_error: bool = False):
-    try:
-        data = json.loads(s)
-    except Exception as e:
-        if raise_error:
-            raise
-        log.debug("ERROR parsing JSON for %s: %s", filename, e)
-        return None
-    else:
-        log.debug("Parsed JSON for %s: %r", filename, data)
-        return cast(FrontMatter, data)
-
-
-def _try_parse_toml(
-    s: str, filename: str, raise_error: bool = False
-) -> Optional[Dict[str, Any]]:
-    try:
-        data = toml.loads(s)
-    except toml.TOMLDecodeError as e:
-        if raise_error:
-            raise
-        log.debug("ERROR parsing TOML front matter for %s: %s", filename, e)
-        return None
-    else:
-        log.debug("Parsed TOML front matter for %s: %r", filename, data)
-        return cast(FrontMatter, data)
-
-
-def _try_parse_simplified_yaml(
-    s: str, filename: str, raise_error: bool = False
-) -> Optional[Dict[str, Any]]:
+def _try_parse_simplified_yaml(s: str, filename: str, raise_error: bool = False):
     parser = configparser.ConfigParser()
     try:
         parser.read_string("[__anonymous__]\n" + s)
@@ -462,14 +470,14 @@ def parse_tests(content: str, spec: TestSpec, filename: str):
     return cast(List[Test], tests)
 
 
-def _test_for_match(m: Match[str], spec: TestSpec, linepos: int, filename: str):
+def _test_for_match(m: re.Match[str], spec: TestSpec, linepos: int, filename: str):
     expr = _format_expr(m, spec, linepos, filename)
     options = _parse_test_options(expr, spec)
     expected = _format_expected(m, linepos, filename)
     return Test(expr, expected, filename, linepos + 1, options)
 
 
-def _format_expr(m: Match[str], spec: TestSpec, linepos: int, filename: str):
+def _format_expr(m: re.Match[str], spec: TestSpec, linepos: int, filename: str):
     lines = _dedented_lines(
         m.group("expr"),
         len(m.group("indent")),
@@ -512,7 +520,7 @@ def _test_option_candidates(s: str, spec: TestSpec) -> Sequence[str]:
     return [m.group(1) for m in re.finditer(spec.option_candidates, s)]
 
 
-def _format_expected(m: Match[str], linepos: int, filename: str):
+def _format_expected(m: re.Match[str], linepos: int, filename: str):
     return "\n".join(
         _dedented_lines(
             m.group("expected"),
@@ -866,7 +874,7 @@ def _decode_options(s: str) -> Dict[str, Any]:
     return dict(_name_val_for_option_match(m) for m in OPTIONS_PATTERN.finditer(s))
 
 
-def _name_val_for_option_match(m: Match[str]) -> Tuple[str, Any]:
+def _name_val_for_option_match(m: re.Match[str]) -> Tuple[str, Any]:
     plus_name, plus_val, neg_name = m.groups()
     if neg_name:
         assert plus_name is None and plus_val is None, m
@@ -963,8 +971,9 @@ def _iter_parse_functions(
         found = 0
         for f in _iter_module_parse_functions(module):
             found += 1
-            log.debug("Found parse function %s", f.__name__)
-            yield _parse_type_name(f), f
+            type_name = _parse_type_name(f)
+            log.debug("Registering function %s as '%s' type", f.__name__, type_name)
+            yield type_name, f
         if not found:
             log.debug("No parse functions found in %s", spec)
 
@@ -973,14 +982,23 @@ def _try_load_module(spec: str, path: List[str]):
     if not isinstance(spec, str):
         log.warning("Invalid value for type-functions %r, expected a string", spec)
         return None
+    _ensure_sys_path_for_doc_tests(path)
     try:
-        return _load_module(spec, path)
+        return importlib.import_module(spec)
     except Exception as e:
         if log.getEffectiveLevel() <= logging.DEBUG:
             log.exception("Loading module %r", spec)
         else:
-            log.warning("Error loading parse functions from %r: %e", spec, e)
+            log.warning("Error loading parse functions from %r: %r", spec, e)
         return None
+
+
+def _ensure_sys_path_for_doc_tests(doctest_path: List[str]):
+    # Add in reverse order as doctest path goes from more specific (test
+    # file path) to less specific (project path)
+    for p in reversed(doctest_path):
+        if p not in sys.path:
+            sys.path.append(p)
 
 
 def _parse_type_name(f: Callable[[str], Any]):
@@ -992,21 +1010,12 @@ def _parse_type_name(f: Callable[[str], Any]):
         return name[6:]
 
 
-def _load_module(spec: str, path: List[str]) -> ModuleType:
-    # Intentionally using deprecated API for loading module as it's
-    # incredibly straight forward relative to the suggested method
-    # https://docs.python.org/library/importlib#approximating-importlib-import-module
-    loader = importlib.find_loader(spec, path)  # type: ignore
-    if not loader:
-        raise ModuleNotFoundError(spec)
-    return loader.load_module()  # type: ignore
-
-
 def _iter_module_parse_functions(
     module: ModuleType,
 ) -> Generator[ParseTypeFunction, None, None]:
     for name in _module_parse_names(module):
         x = getattr(module, name)
+
         if _is_parse_function(x):
             yield x
 
@@ -1025,7 +1034,7 @@ def _is_parse_function(x: Any):
     except TypeError:
         return False
     else:
-        return len(sig.parameters) == 1
+        return len(sig.parameters) >= 1
 
 
 def _parselib_regex_types(config: TestConfig) -> ParseTypeFunctions:
