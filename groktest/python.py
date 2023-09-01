@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import *
+from typing import IO
 
 from subprocess import Popen
 
@@ -293,9 +294,19 @@ def _exec_test(test: TestReq, globals: Dict[str, Any]):
 
 
 def _maybe_pretty_print_result(result: Any, options: TestOptions):
-    if result is None or not options.get("pprint"):
+    if result is None:
         return
-    pprint.pprint(result, width=72)
+    if options.get("pprint"):
+        pprint.pprint(result, width=72)
+        return
+    if options.get("json"):
+        try:
+            fmt = json.dumps(result, indent=2, sort_keys=True)
+        except TypeError:
+            pass
+        else:
+            print(fmt)
+        return
 
 
 def _compile_test_expr(test: TestReq):
@@ -308,7 +319,7 @@ def _compile_test_expr(test: TestReq):
     evaluation (i.e. we get a syntax error) we fall back on 'single'
     mode.
     """
-    if not test.options.get("pprint"):
+    if not _wants_pretty_print(test.options):
         return _gen_compile_test_expr("single", test)
 
     # Test wants pretty print - try 'eval' mode
@@ -316,6 +327,10 @@ def _compile_test_expr(test: TestReq):
         return _gen_compile_test_expr("eval", test)
     except SyntaxError:
         return _gen_compile_test_expr("single", test)
+
+
+def _wants_pretty_print(options: TestOptions):
+    return options.get("pprint") or options.get("json")
 
 
 def _gen_compile_test_expr(mode: str, test: TestReq):
