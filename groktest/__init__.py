@@ -327,7 +327,7 @@ def _parsed_front_matter(s: str, filename: str):
 
 
 def _empty_front_matter(filename: str):
-    log.debug("Missing or unparseable front matter for %s", filename)
+    log.debug("Missing or unparsable front matter for %s", filename)
     return cast(FrontMatter, {})
 
 
@@ -1275,7 +1275,7 @@ def _strip_trailing_lf(s: str):
 def _print_mismatch_reason(reason: Any, test: Test):
     msg = str(reason)
     # Try format spec error message
-    m = re.match(r"format spec '(.+?)' not recognised", msg)
+    m = re.match(r"format spec '(.+?)' not recognized", msg)
     if m:
         type = m.group(1)
         line = _find_parse_type_line(type, test.expected)
