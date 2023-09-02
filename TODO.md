@@ -151,3 +151,42 @@ It'd be nice to feature `assert decode(encode(e)) == s` as the example.
 - I think it should use color inline - the line by line diffs are too
   hard to read (maybe)
 - This might be hard
+
+## Re-binding matched names with checks
+
+Currently a re-binding of a parsed value simply updates the global
+state. I think this is wrong - it should only update if the variable is
+not previously bound. Further, Groktest should consider the test a
+failure if the re-binding attempts to change the current value.
+
+Here's an example.
+
+    >>> print("Hello Joe")  # +parse
+    Hello {name}
+
+    >>> name
+    'Joe'
+
+    >>> print("Hello Mike")  # +parse
+    Hello {name}
+
+    >>> name
+    'Mike'
+
+  This is no good! The test that attempts the second binding should fail
+  in its attempt to update `name` with any value other than `'Joe'`.
+
+  Steps to implement:
+
+  - A call to `state.runtime.handle_test_match(match)` should be capable
+    of failing with some message - in particular a 'variable match'
+    error or something to that effect.
+
+  - If the call fails, the test fails.
+
+  - The Python runtime, which has access to the globals and is
+    responsible for updating globals with 'vars' should refuse to update
+    a var with a new value. Matching values are okay!
+
+This will provide an excellent assertion ability based on pattern
+matching! This should be a 1.0 feature.
