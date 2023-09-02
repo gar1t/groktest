@@ -8,7 +8,7 @@ options = "+wildcard"
 Assertions are useful for testing values that aren't suitable for
 test-by-example. Value ranges are a good example.
 
-Take `x`, which should be between `0` and `100` incluive.
+Take `x`, which should be between `0` and `100` inclusive.
 
     >>> x = 50
 
@@ -21,20 +21,17 @@ What happens when the assertion fails?
 
     >>> x = 101
 
-In the case above, we just get this:
-
     >>> assert 0 <= x <= 100
     Traceback (most recent call last):
-    AssertionError
+    AssertionError: {'x': 101}
 
-This output doesn't tell us anything about `x`.
+Groktest applies special handling to the assertion failure - it provides
+a dict of named values used in the expression. This can be used to
+diagnose the failure.
 
-In this case, we should use a second term in the `assert` statement that
-provides diagnistic values.
+Alternatively, the test itself may provide diagnostic information. In
+this case, Groktest does not  modify the assertion error.
 
     >>> assert 0 <= x <= 100, x
     Traceback (most recent call last):
     AssertionError: 101
-
-With this report, we know `x` is 101 and can take appropriate next steps
-to fix the code or the test.

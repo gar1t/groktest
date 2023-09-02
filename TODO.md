@@ -23,7 +23,7 @@
 
 - Support KeyboardInterrupt
 
-- Apply `--last` to a project (savefile is per project)
+- Apply `--last` to a project (save file is per project)
 
 - Support debugging (i.e. calls to `breakpoint()` should work!)
 
@@ -85,7 +85,7 @@ Needed options (lower priority at this point):
 Cleanup test report scheme:
 
 - Generalize (e.g. reporter/callback facility)
-- Modernize Grokville reports
+- Modernize Groktest reports
 - Test results as dict is lame - we should type this
 - Should know about skipped tests
 
@@ -140,43 +140,6 @@ As a doc test:
 It'd be nice to feature `assert decode(encode(e)) == s` as the example.
 
     >>> assert decode(encode(s)) == s # +given s = text(), example('')
-
-## Assertions
-
-This is okay:
-
-    >>> assert x < 0, x
-
-This is better:
-
-    >>> assert x < 0
-
-This may be even better:
-
-    >>> x < 0
-
-Could we create an option `assert` that considers `True` result to be a
-pass and antying else to be a fail?
-
-    >>> x < 0  # +assert
-
-When defined in front matter, the assertions tokens go away.
-
-This option would have to dig out the expression details and provide a
-decent report. The implementation here is straight forward - use `ast`
-to find names used in the expression and show their values in the
-report.
-
-I think the simplification of the expression comes with some confusion -
-why isn't this expression evaluating to a boolean on success? Using
-`assert` clears this up.
-
-The winner:
-
-    >>> assert x < 100
-
-with a good report on the assertion failure. This could be behavior
-that can be disabled with an option (e.g. `-assert`).
 
 ## Reports
 

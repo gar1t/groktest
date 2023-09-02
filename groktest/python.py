@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import *
 from typing import IO
+from types import CodeType
 
 from subprocess import Popen
 
@@ -289,8 +290,21 @@ class _StdOutCapture(io.StringIO):
 def _exec_test(test: TestReq, globals: Dict[str, Any]):
     _apply_test_globals_effect(test, globals)
     code = _compile_test_expr(test)
-    result = eval(code, globals)
+    try:
+        result = eval(code, globals)
+    except AssertionError as e:
+        _maybe_apply_code_vars(e, code, globals)
+        raise
     _maybe_pretty_print_result(result, test.options)
+
+
+def _maybe_apply_code_vars(e: AssertionError, code: CodeType, globals: Dict[str, Any]):
+    if not e.args:
+        e.args = (_code_vars(code, globals),)
+
+
+def _code_vars(code: CodeType, globals: Dict[str, Any]):
+    return {name: globals[name] for name in code.co_names if name in globals}
 
 
 def _maybe_pretty_print_result(result: Any, options: TestOptions):
@@ -345,7 +359,7 @@ def _gen_compile_test_expr(mode: str, test: TestReq):
 def _format_test_sourcecode(test: TestReq):
     """Returns test expression source code suitable for compile.
 
-    Preppends empty lines to affect test source code line. In tracebacks
+    Prepends empty lines to affect test source code line. In tracebacks
     we want to refer to the test source code file (filename) and the
     correct line number in that file. Empty lines is a convenient way to
     offset the line number accordingly.

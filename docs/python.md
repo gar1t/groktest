@@ -9,6 +9,8 @@ options = "+ELLIPSIS"
 Python support is provided by the Python runtime defined in
 `groktest.python`.
 
+## Starting a runtime
+
 Use `start_runtime` to create an initialized instance of a Python
 runtime.
 
@@ -21,10 +23,14 @@ Confirm the runtime is available.
     >>> python.is_available()
     True
 
+## Initializing a runtime for tests
+
 The runtime can be initialized for tests using `init_for_tests` and
 providing init configuration.
 
     >>> python.init_for_tests({"python": {"init": "msg = 'Hi!'"}})
+
+## Executing test expressions
 
 Create a helper to execute test expressions. We use the Python test spec
 for parsing.
@@ -112,6 +118,40 @@ Note that `msg`, which we defined for the runtime using
     >>> run_test(">>> print(msg)")
     Hi!
     <BLANKLINE>
+
+### Special handling for assertions
+
+The Python runtime applies special handling to assertion errors. When it
+encounters an assertion error when executing a test expression, it
+applies a dict of values used in the expression as an argument to the
+assertion error if one has not already been provided.
+
+    >>> run_test(">>> x = 1; assert x < 1")
+    Traceback (most recent call last):
+      File "<test>", line 1, in <module>
+    AssertionError: {'x': 1}
+    <BLANKLINE>
+    ----short error----
+    Traceback (most recent call last):
+    AssertionError: {'x': 1}
+    <BLANKLINE>
+
+If the expression provides an argument for the assertion error, it's
+used as specified.
+
+    >>> run_test(">>> x = 1; assert x < 1, f'x = {x}'")
+    Traceback (most recent call last):
+      File "<test>", line 1, in <module>
+    AssertionError: x = 1
+    <BLANKLINE>
+    ----short error----
+    Traceback (most recent call last):
+    AssertionError: x = 1
+    <BLANKLINE>
+
+## Stopping a runtime
+
+The Python runtime should be stopped when no longer needed.
 
 Stop the runtime.
 

@@ -148,7 +148,7 @@ blank line matching in this case.
     Got:
     <BLANKLINE>
 
-Disabling blanklines is useful in the rare case where `⤶` is used in the
+Disabling blankline is useful in the rare case where `⤶` is used in the
 expected output.
 
 Without disabling or changing the blank line support, this example fail:
@@ -200,11 +200,11 @@ provide details on why output doesn't match.
 In this case, the user must compare expected and actual output and
 determine that the parse type `d` cannot match `'ten'` because it only
 matches integers. It would be helpful if Groktest isolated the pattern
-mismtach and offered information to help troubleshoot the problem.
+mismatch and offered information to help troubleshoot the problem.
 
 ### Wildcard
 
-The `wildcard` option presents a simpified alternative to `parse` in
+The `wildcard` option presents a simplified alternative to `parse` in
 cases where any text can be matched.
 
     >>> test("""
