@@ -190,3 +190,28 @@ Here's an example.
 
 This will provide an excellent assertion ability based on pattern
 matching! This should be a 1.0 feature.
+
+## Smart suite testing
+
+When running a suite of tests (currently, project-defined tests),
+Groktest should keep track of staleness and only run test docs that need
+to run.
+
+A stale test doc is:
+
+- One that has not been run or had any failures on the last run
+- One whose dependencies have changed since its last run
+
+How calculate dependencies?
+
+Is there simply a switch we can use (e.g. `--needed` or `--cache`) to
+say, "remember the last result and re-run if there was a failure or the
+test has been changed".
+
+Then one could create a second "Run All Tests" task that uses this mode.
+
+Something like this is needed as it's a) very handy to "run all tests"
+at a whim to make sure everything is passing and b) very time consuming
+to actually run all tests. Short of this, one needs to "run all tests",
+note the failure docs, then re-run those individually until each passes.
+Total pain.
