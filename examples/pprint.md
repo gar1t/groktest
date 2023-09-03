@@ -67,3 +67,11 @@ In both formats, keys are sorted.
       "yyyyyyyyyy": 456,
       "zzzzzzzzzz": 123
     }
+
+When using `pprint` or `json`, None values are also printed.
+
+    >>> None  # +pprint
+    None
+
+    >>> None  # +json
+    null

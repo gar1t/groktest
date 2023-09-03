@@ -308,19 +308,15 @@ def _code_vars(code: CodeType, globals: Dict[str, Any]):
 
 
 def _maybe_pretty_print_result(result: Any, options: TestOptions):
-    if result is None:
-        return
     if options.get("pprint"):
         pprint.pprint(result, width=72)
-        return
-    if options.get("json"):
+    elif options.get("json"):
         try:
             fmt = json.dumps(result, indent=2, sort_keys=True)
         except TypeError:
             pass
         else:
             print(fmt)
-        return
 
 
 def _compile_test_expr(test: TestReq):
