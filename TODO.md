@@ -204,11 +204,22 @@ A stale test doc is:
 
 How calculate dependencies?
 
+Short of some clever (and probably brittle) sniffing of read flags,
+there seems two options:
+
+1. Don't bother with dependencies apart from the test doc file itself
+
+2. Consider all non test docs under the project to be required and if
+   any are modified, consider the test stale (implication obviously is
+   that any change to any non test file invalidates all prior test
+   results, which is pretty extreme)
+
 Is there simply a switch we can use (e.g. `--needed` or `--cache`) to
 say, "remember the last result and re-run if there was a failure or the
 test has been changed".
 
 Then one could create a second "Run All Tests" task that uses this mode.
+E.g. "Run All Tests (cached)"
 
 Something like this is needed as it's a) very handy to "run all tests"
 at a whim to make sure everything is passing and b) very time consuming
