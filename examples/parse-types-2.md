@@ -1,6 +1,9 @@
 ---
 test-options = "+parse"
 parse-functions = "custom_types"
+
+[parse-types]
+foo = "(?i)foo"
 ---
 
 # Custom parse types
@@ -46,3 +49,17 @@ parse type because it's not listed in the module's `__all__` attribute.
 
     >>> 123  # +fails
     {:internal}
+
+Custom types can be defined in front matter using regular expressions.
+
+    >>> print("FOO")
+    {:foo}
+
+    >>> print("foo")
+    {:foo}
+
+    >>> print("fOo")
+    {:foo}
+
+    >>> print("BAR")  # +fails
+    {:foo}

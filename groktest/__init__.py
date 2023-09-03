@@ -278,6 +278,7 @@ def init_runner_state(filename: str, project_config: Optional[ProjectConfig] = N
     fm = _parse_front_matter(contents, filename)
     spec = _spec_for_front_matter(fm, filename)
     test_config = _test_config(fm, project_config, filename)
+    log.debug("test config: %s", test_config)
     if spec is DOCTEST_MARKER:
         return DocTestRunnerState(filename, test_config)
     runtime = start_runtime(spec.runtime, test_config)
@@ -572,8 +573,16 @@ def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> Test
     # Selectively merge/append test config back into result
     _merge_append_list(["options"], test_config, merged)
     _merge_append_list(["python", "init"], test_config, merged)
+    _merge_items(["parse", "types"], test_config, merged)
     _merge_append_list(["__src__"], test_config, merged)
     return merged
+
+
+def front_matter_to_config(fm: FrontMatter) -> TestConfig:
+    try:
+        return fm["tool"]["groktest"]
+    except KeyError:
+        return _mapped_front_matter_config(fm)
 
 
 FRONT_MATTER_TO_CONFIG = {
@@ -582,13 +591,6 @@ FRONT_MATTER_TO_CONFIG = {
     "python-init": ["python", "init"],
     "test-options": ["options"],
 }
-
-
-def front_matter_to_config(fm: FrontMatter) -> TestConfig:
-    try:
-        return fm["tool"]["groktest"]
-    except KeyError:
-        return _mapped_front_matter_config(fm)
 
 
 def _mapped_front_matter_config(fm: FrontMatter) -> TestConfig:
@@ -641,6 +643,14 @@ def _merge_append_list(path: List[str], src: Dict[str, Any], dest: Dict[str, Any
         return
     assert append_dest
     append_dest[key] = _coerce_list(src_val) + _coerce_list(append_dest.get(key))
+
+
+def _merge_items(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
+    key, src_val, merge_dest = _merge_kv_dest(path, src, dest)
+    if not key:
+        return
+    assert merge_dest
+    merge_dest.setdefault(key, {}).update(src_val)
 
 
 def _coerce_list(x: Any) -> List[Any]:
