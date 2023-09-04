@@ -101,7 +101,7 @@ Blank lines can be disabled using the `blankline` option.
     >>> print("⤶")  # -blankline
     ⤶
 
-The token used to represent blank lines in outout can be modified when
+The token used to represent blank lines in output can be modified when
 enabling the `blankline` option.
 
     >>> print("⤶\n\n⤶")  # +blankline=<BLANKLINE>
@@ -119,7 +119,7 @@ Wildcard matching is not enabled by default.
     >>> "The sun is strong"  # +fails
     'The ... is strong'
 
-Enable it using the `wilcard` option.
+Enable it using the `wildcard` option.
 
     >>> "The moon hovers"  # +wildcard
     'The ... hovers'

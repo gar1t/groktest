@@ -43,7 +43,7 @@ enabled or disabled, When enabled, an option may have a value.
 
   It can be useful to include tests that fail as examples. If the test
   succeeds unexpectedly, the success is recorded as a failure in the
-  outout. Otherwise the test is considered to have passed.
+  output. Otherwise the test is considered to have passed.
 
   Similar in application to `+skip` but asserts an expected failure.
 
@@ -119,8 +119,8 @@ disable an option respectively.
     >>> parse("-bar +foo")
     {'bar': False, 'foo': True}
 
-If an option is specified more than once, the last occurance is used to
-determint the option value.
+If an option is specified more than once, the last occurrence is used to
+determine the option value.
 
     >>> parse("-foo +foo")
     {'foo': True}
@@ -182,8 +182,8 @@ Tokens that don't match the option specification are ignored.
 
 Typical configuration examples:
 
-    >>> parse("+wildard")
-    {'wildard': True}
+    >>> parse("+wildcard")
+    {'wildcard': True}
 
     >>> parse("-case")
     {'case': False}

@@ -40,7 +40,7 @@ Default configuration is provided by `groktest.DEFAULT_SPEC`.
 Tests are captured using the configured `test_pattern` regular
 expression. The default pattern uses PS1 and PS2 prompts to denote the
 test expression. It captures the subsequent block of non-empty lines as
-the test expected outout.
+the test expected output.
 
 Groktest's default pattern uses the `doctest` prompts.
 
@@ -62,7 +62,7 @@ Function to print found tests using the default configuration:
     ...     for m in DEFAULT_SPEC.test_pattern.finditer(s):
     ...         pprint(m.groupdict())
 
-Single line test expression, no expexted output, no indent:
+Single line test expression, no expected output, no indent:
 
     >>> find_tests(">>> None")
     {'expected': '', 'expr': '>>> None', 'indent': ''}
@@ -122,7 +122,7 @@ One line expression, one line of expected output:
     expr: '1'
     expected: '1'
 
-Multi-line expression, multiple lines of outout:
+Multi-line expression, multiple lines of output:
 
     >>> parse_tests("""
     ...   >>> print('''1

@@ -10,7 +10,8 @@ Test prompts are denoted using `>>>`.
     >>> 1 + 1
     2
 
-Tests don't need to be indented. However, to format examples using fenced blocks in Mardown, tests must be followed by an empty line.
+Tests don't need to be indented. However, to format examples using
+fenced blocks in markdown, tests must be followed by an empty line.
 
 ```
 >>> 1 + 2
@@ -18,7 +19,7 @@ Tests don't need to be indented. However, to format examples using fenced blocks
 
 ```
 
-For this reason Groktest recommends indenting tests in Mardown files.
+For this reason Groktest recommends indenting tests in markdown files.
 
 Errors are tested by providing a `Traceback` example.
 

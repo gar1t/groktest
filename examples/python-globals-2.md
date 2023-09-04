@@ -9,7 +9,7 @@ def greet():
 # """ hack to fix syntax highlighting in VS Code
 ---
 
-This example shows a deeper configuation using TOML. In this case the
+This example shows a deeper configuration using TOML. In this case the
 configuration follows the naming convention used in `pyproject.toml` to
 init Python globals.
 

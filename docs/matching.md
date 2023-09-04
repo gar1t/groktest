@@ -58,7 +58,7 @@ When `case` is disabled, matching is case insensitive.
 If `wildcard` is specified, the specified token is used to match any
 output up to the output following the wildcard.
 
-A single wilcard matches everything.
+A single wildcard matches everything.
 
     >>> str_match("...", "Anything here matches", {"wildcard": "..."})
     True
@@ -104,7 +104,7 @@ The token is consumed from left to right.
 
 ## Parse matching
 
-Grokville's `parse` option enables parse matching. Parse matching is
+Groktest's `parse` option enables parse matching. Parse matching is
 implemented by `groktest.parse_match`.
 
     >>> def parse_match(expected, test_output, options=None, types=None):
@@ -204,7 +204,7 @@ Match types can specify a case-insensitive pattern using `(?i)`.
     ... )
     {'color': 'bluE'}
 
-Patterns match across multipe lines.
+Patterns match across multiple lines.
 
     >>> parse_match(
     ... """
