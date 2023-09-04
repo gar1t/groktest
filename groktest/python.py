@@ -92,6 +92,7 @@ def _open_proc():
         stdout=subprocess.PIPE,
         stdin=subprocess.PIPE,
         text=True,
+        env={"PYTHONNODEBUGRANGES": "1"}
     )
 
 
