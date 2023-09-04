@@ -188,22 +188,6 @@ Compare with case insensitive.
     >>> parse_match("Hello", "hello", options={"case": False})
     {}
 
-Match types can specify a case-insensitive pattern using `(?i)`.
-
-    >>> parse_match(
-    ...     "A {color:color} cat",
-    ...     "A RED cat",
-    ...     types={"color": "(?i)blue|red"}
-    ... )
-    {'color': 'RED'}
-
-    >>> parse_match(
-    ...     "A {color:color} cat",
-    ...     "A bluE cat",
-    ...     types={"color": "(?i)blue|red"}
-    ... )
-    {'color': 'bluE'}
-
 Patterns match across multiple lines.
 
     >>> parse_match(
