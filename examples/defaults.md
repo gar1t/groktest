@@ -57,10 +57,9 @@ output, the evaluated result is included after printed output.
 ## Blank lines
 
 Groktest requires that expected output contain only non-blank lines. To
-represent a blank line in expected output, use a blank line marker.
-Groktest uses the token `⤶` (unicode
-[2936](https://www.compart.com/en/unicode/U+2936)) to represent a blank
-line. This is equivalent to `<BLANKLINE>` in `doctest`.
+represent a blank line in expected output, use a blank line marker. Groktest
+uses the token `⤶` (unicode [2936](https://www.compart.com/en/unicode/U+2936))
+to represent a blank line. This is equivalent to `<BLANKLINE>` in `doctest`.
 
     >>> print("")
     ⤶

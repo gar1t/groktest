@@ -51,4 +51,4 @@ A file must exist.
 
     >>> init_runner_state("does_not_exist")
     Traceback (most recent call last):
-    FileNotFoundError: [Errno 2] No such file or directory: '.../does_not_exist'
+    FileNotFoundError: [Errno 2] No such file or directory: '...does_not_exist'
