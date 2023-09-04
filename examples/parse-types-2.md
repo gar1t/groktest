@@ -31,7 +31,7 @@ parts as ints.
     >>> release_ver
     [0, 10, 1]
 
-`loud` convers the matched string to upper-case.
+`loud` converts the matched string to upper-case.
 
     >>> "They said 'the world is flat'"
     "They said '{what_they_said:loud}'"

@@ -2,7 +2,7 @@
 
 Groktest supports pretty-printing Python using one of two methods: the
 pprint module and json formatting. Pretty printing for each method is
-enabled using `pprint` and `jprint` options respectively.
+enabled using `pprint` and `json` options respectively.
 
     >>> numbers = list(range(0, 1000000, 100000))
 

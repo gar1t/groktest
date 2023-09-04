@@ -5,7 +5,7 @@ test-type: doctest
 # Front matter
 
 Front matter is denoted by a line `---` at the start of the file
-followed by a subseuqnet line `---`.
+followed by a subsequent line `---`.
 
 Front matter is matched using `groktest._FRONT_MATTER_P`.
 
@@ -150,7 +150,7 @@ external libraries such as PyYAML. PyYAML is required for full YAML
 support. See [yaml.md](yaml.md) for details on parsing full YAML.
 
 The internal function `_try_parse_simplified_yaml` implements support
-for parsing simpligied YAML.
+for parsing simplified YAML.
 
     >>> def parse_simplified_yaml(s):
     ...     pprint(groktest._try_parse_simplified_yaml(
