@@ -120,7 +120,12 @@ def _close_proc(p: Popen[str], timeout: int):
     try:
         p.wait(timeout)
     except subprocess.TimeoutExpired:
-        p.send_signal(signal.SIGKILL)
+        p.send_signal(_sigkill())
+
+
+def _sigkill():
+    # SIGKILL is not available on all platforms, fallback on SIGTERM
+    return getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 def _init_for_tests(config: TestConfig, proc: Popen[str]):
@@ -414,6 +419,11 @@ def _format_full_error(tb: str, test: Optional[TestReq]):
     return _strip_doctest_prompts(_strip_internal_calls(tb), test)
 
 
+_FILE_SOURCECODE_PATTERN = re.compile(
+    r"(?m)( +File \"(.+)\", line \d+, in .+\n)( +.+\n)?"
+)
+
+
 def _strip_error_detail(tb: str):
     parts = []
     charpos = 0
@@ -422,11 +432,6 @@ def _strip_error_detail(tb: str):
         charpos = m.end()
     parts.append(tb[charpos:])
     return "".join(parts)
-
-
-_FILE_SOURCECODE_PATTERN = re.compile(
-    r"(?m)( +File \"(.+)\", line \d+, in .+\n)( +.+\n)?"
-)
 
 
 def _strip_doctest_prompts(tb: str, test: Optional[TestReq]):
