@@ -16,8 +16,10 @@ python-init: "msg = 'Hello!'"
 
 Python tests have access to the standard set of Python builtins.
 
-    >>> sorted(__builtins__)
-    ['ArithmeticError', 'AssertionError', ..., 'zip']
+    >>> min, max, sorted  # -space
+    (<built-in function min>,
+     <built-in function max>,
+     <built-in function sorted>)
 
 `__name__` is the test file base name.
 
@@ -26,7 +28,7 @@ Python tests have access to the standard set of Python builtins.
 
 `__file__` is the full path to the test file.
 
-    >>> __file__
+    >>> __file__  # +paths
     '.../examples/python-globals.md'
 
 All other globals are configured by `python-init` configuration, which
@@ -39,7 +41,7 @@ Show project config using `load_project_config`:
 
     >>> project_config = path.normpath(__file__ + "/../../pyproject.toml")
 
-    >>> load_project_config(project_config)  # +pprint
+    >>> load_project_config(project_config)  # +pprint +paths
     {'__src__': '.../pyproject.toml',
      'exclude': ['docs/yaml.md', 'examples/unknown-format.md'],
      'include': ['README.md', 'docs/*.md', 'examples/*.md'],

@@ -33,10 +33,10 @@ Handle a short error.
 To handle the full error, include the error details. In the case of
 Python, error details consist of the error call stack.
 
-    >>> boom()  # +diff
+    >>> boom()  # +diff +paths
     Traceback (most recent call last):
       File ".../examples/errors.md", line ..., in <module>
-        boom()  # +diff
+        boom()  # +diff +paths
       File ".../examples/errors.md", line ..., in boom
             util.boom()
       File ".../examples/util.py", line ..., in boom
@@ -49,10 +49,10 @@ wildcards or parse patterns when providing error details.
 
 Other examples:
 
-    >>> raise ValueError("a\nb\nc")  # +wildcard
+    >>> raise ValueError("a\nb\nc")  # +wildcard +paths
     Traceback (most recent call last):
       File ".../examples/errors.md", line ..., in <module>
-        raise ValueError("a\nb\nc")  # +wildcard
+        raise ValueError("a\nb\nc")  # +wildcard +paths
     ValueError: a
     b
     c
@@ -65,18 +65,18 @@ Other examples:
 
 Exception values that contain indented lines:
 
-    >>> raise ValueError("a\n  b\nc")  # +wildcard
+    >>> raise ValueError("a\n  b\nc")  # +wildcard +paths
     Traceback (most recent call last):
       File ".../examples/errors.md", line ..., in <module>
-        raise ValueError("a\n  b\nc")  # +wildcard
+        raise ValueError("a\n  b\nc")  # +wildcard +paths
     ValueError: a
       b
     c
 
-    >>> raise ValueError("a\n  b\nc")  # +parse
+    >>> raise ValueError("a\n  b\nc")  # +parse +paths
     Traceback (most recent call last):
       File "{}/examples/errors.md", line {:d}, in <module>
-        raise ValueError("a\n  b\nc")  # +parse
+        raise ValueError("a\n  b\nc")  # +parse +paths
     ValueError: a
       b
     c

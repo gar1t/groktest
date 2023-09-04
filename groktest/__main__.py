@@ -159,20 +159,12 @@ def _project_candidate(path_arg: str):
 def _test_filenames(config: Optional[ProjectConfig], args: Any):
     if config is None:
         return args.paths
-    try:
-        include = _coerce_list(config["include"])
-    except KeyError:
-        src = config["__src__"]
-        raise SystemExit(f"Missing 'include' in 'tool.groktest' section in {src}")
-    else:
-        basepath = os.path.dirname(config["__src__"])
-        return _filenames_for_test_patterns(
-            include,
-            _coerce_list(
-                config.get("exclude"),
-            ),
-            basepath,
-        )
+    include = _coerce_list(config.get("include"))
+    if not include:
+        raise SystemExit(f"Missing 'include' in 'tool.groktest' section in {config['__src__']}")
+    basepath = os.path.dirname(config["__src__"])
+    exclude = _coerce_list(config.get("exclude"))
+    return _filenames_for_test_patterns(include, exclude, basepath)
 
 
 def _coerce_list(val: Any) -> List[Any]:
@@ -195,7 +187,7 @@ def _apply_test_patterns(patterns: List[str], basepath: str, desc: str):
         pattern_path = os.path.join(basepath, pattern)
         matches = glob.glob(pattern_path, recursive=True)
         log.debug("tests for %s pattern '%s': %s", desc, pattern, matches)
-        filenames.extend(matches)
+        filenames.extend([os.path.normpath(path) for path in matches])
     return filenames
 
 

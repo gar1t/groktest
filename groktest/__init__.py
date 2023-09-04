@@ -292,7 +292,12 @@ def init_test_runner_state(spec: TestSpec, filename: Optional[str] = None):
 
 
 def _read_file(filename: str):
-    return open(filename).read()
+    bytes = open(filename, "rb").read()
+    return _norm_line_endings(bytes).decode()
+
+
+def _norm_line_endings(b: bytes):
+    return b.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
 
 
 _FRONT_MATTER_P = re.compile(r"\s*^---\n(.*)\n---\n?$", re.MULTILINE | re.DOTALL)
@@ -787,6 +792,7 @@ def _format_match_expected(test: Test, options: TestOptions, spec: TestSpec):
     expected = _append_lf_for_non_empty(test.expected)
     expected = _maybe_remove_blankline_markers(expected, options, spec)
     expected = _maybe_normalize_whitespace(expected, options)
+    expected = _maybe_normalize_paths(expected, options)
     return expected
 
 
@@ -818,11 +824,13 @@ def _maybe_normalize_whitespace(s: str, options: TestOptions):
     keep_whitespace = _option_value("space", options, True)
     if keep_whitespace:
         return s
-    return _normalize_whitespace(s)
-
-
-def _normalize_whitespace(s: str):
     return " ".join(s.split())
+
+
+def _maybe_normalize_paths(s: str, options: TestOptions):
+    if not _option_value("paths", options, False):
+        return s
+    return s.replace("\\\\", "\\").replace("\\", "/")
 
 
 def _match_test_output_candidates(result: TestResult, test: Test, options: TestOptions):
@@ -834,13 +842,16 @@ def _match_test_output_candidates(result: TestResult, test: Test, options: TestO
 
 
 def _format_test_output(output: str, options: TestOptions):
-    return _maybe_normalize_whitespace(_truncate_empty_line_spaces(output), options)
+    output = _truncate_empty_line_spaces(output)
+    output = _maybe_normalize_whitespace(output, options)
+    output = _maybe_normalize_paths(output, options)
+    return output
 
 
 def _maybe_short_error(result: TestResult, options: TestOptions):
     if result.short_error and not _option_value("error-detail", options, False):
         return result.short_error
-    return result.output
+    return None
 
 
 def _truncate_empty_line_spaces(s: str):
