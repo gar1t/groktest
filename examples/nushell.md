@@ -21,9 +21,11 @@ Test starts in the test doc directory.
     ...
     whitespace.md
 
-    > ls
+Nushell tests are configured with a temporary directory, which can be
+referenced using `$env.TEST_TEMP`.
 
-Changes to the directory are reflected across tests.
+    > $env.TEST_TEMP  # +wildcard +paths
+    .../groktest-nushell-...
 
     > cd $env.TEST_TEMP
 
@@ -32,3 +34,25 @@ Changes to the directory are reflected across tests.
 
     > ls
     ⤶
+
+    > touch hello
+
+    > ls
+    name  type size modified
+    hello file  0 B now
+    ⤶
+
+Bound variables are accessible via the `vars` Nu variable.
+
+    > print "Hello Joe"  # +parse
+    Hello {name}
+
+    > $vars.name
+    Joe
+
+Other variables are NOT retained across tests.
+
+    > let x = 123
+
+    > $x
+    Error: nu::parser::variable_not_found

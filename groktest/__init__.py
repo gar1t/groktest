@@ -780,7 +780,8 @@ def _handle_test_result(
 ):
     expected = _format_match_expected(test, options, state.spec)
     output_candidates = _match_test_output_candidates(result, test, options)
-    match = _try_match_output_candidates(output_candidates, expected, test, state)
+    match, match_output = _try_match_output_candidates(output_candidates, expected, test, state)
+    _log_test_result_match(match, result, test, expected, match_output, state)
     if options.get("fails"):
         if match.match:
             _handle_unexpected_test_pass(test, options, state)
@@ -792,17 +793,41 @@ def _handle_test_result(
         _handle_test_failed(test, match, result, options, state)
 
 
+def _log_test_result_match(
+    match: TestMatch,
+    result: TestResult,
+    test: Test,
+    used_expected: str,
+    used_test_output: str,
+    state: RunnerState,
+):
+    log.debug("Result for %r", test.expr)
+    log.debug("  match:           %s", "yes" if match.match else "no")
+    if match.match:
+        log.debug("  match vars:    %s", match.vars)
+    log.debug("  test expected:   %r", test.expected)
+    log.debug("  test output [%r]: %r", result.code, result.output)
+    log.debug("  used expected:   %r", used_expected)
+    log.debug("  used output:     %r", used_test_output)
+
+
+
+
+
 def _try_match_output_candidates(
     output_candidates: List[str], expected: str, test: Test, state: RunnerState
 ):
     assert output_candidates
     match = None
+    matched_output = None
     for output in output_candidates:
         match = match_test_output(expected, output, test, state.config, state.spec)
+        matched_output = output
         if match.match:
-            return match
+            break
     assert match
-    return match
+    assert matched_output is not None
+    return match, matched_output
 
 
 def _handle_unexpected_test_pass(test: Test, options: TestOptions, state: RunnerState):
@@ -1186,24 +1211,6 @@ def _default_str_match(
     options: Optional[TestOptions] = None,
 ):
     return TestMatch(True) if test_output == expected else TestMatch(False)
-
-
-def _log_test_result_match(
-    match: TestMatch,
-    result: TestResult,
-    test: Test,
-    used_expected: str,
-    used_test_output: str,
-    state: RunnerState,
-):
-    log.debug("Result for %r", test.expr)
-    log.debug("  match: %s", "yes" if match.match else "no")
-    if match.match:
-        log.debug("  match vars: %s", match.vars)
-    log.debug("  test expected: %r", test.expected)
-    log.debug("  test output: (%r) %r", result.code, result.output)
-    log.debug("  used expected: %r", used_expected)
-    log.debug("  used output: %r", used_test_output)
 
 
 def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):

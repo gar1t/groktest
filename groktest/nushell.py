@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import *
 
+import json
 import logging
 import os
 import re
@@ -18,7 +19,7 @@ from .__init__ import TestMatch
 from .__init__ import TestOptions
 from .__init__ import TestResult
 
-log = logging.getLogger("groktest.python")
+log = logging.getLogger(__name__)
 
 _ENV_VAR_NAME_P = re.compile(r"^[A-Z][A-Z0-9_-]*$")
 
@@ -46,25 +47,48 @@ $env.config = {
 """
 
 
+class State:
+    def __init__(self, config_home: str):
+        self.config_home = config_home
+        self.vars: Dict[str, Any] = {}
+        self.last_saved_vars = None
+        self.env: Dict[str, str] = {}
+        self.cwd: Optional[str] = None
+
+    @property
+    def test_config_filename(self):
+        return os.path.join(self.config_home, "config.nu")
+
+    @property
+    def vars_json_filename(self):
+        return os.path.join(self.config_home, "vars.json")
+
+    @property
+    def vars_nu_filename(self):
+        return os.path.join(self.config_home, "vars.nu")
+
+
 class NuShellRuntime(Runtime):
-    _cache: Optional[Dict[str, Any]] = None
+    _state: Optional[State] = None
 
     def start(self, config: Optional[TestConfig] = None):
-        self._cache = {}
+        self._state = _init_state()
 
     def init_for_tests(self, config: TestConfig | None = None) -> None:
-        assert self._cache is not None
-        self._cache = _init_tests()
+        assert self._state is not None
+        self._state.vars.clear()
+        self._state.cwd = None
 
     def exec_test_expr(self, test: Test, options: TestOptions):
-        assert self._cache is not None
-        _maybe_apply_test_cwd(test, self._cache)
-        return _exec_test_expr(test, self._cache)
+        assert self._state
+        _apply_test_cwd(test, self._state)
+        _apply_vars(self._state)
+        return _exec_test_expr(test, self._state)
 
     def handle_test_match(self, match: TestMatch):
         if match.match and match.vars:
-            assert self._cache is not None
-            self._cache.update(match.vars)
+            assert self._state
+            self._state.vars.update(match.vars)
 
     def stop(self, timeout: int = 5):
         self._cache = None
@@ -73,57 +97,108 @@ class NuShellRuntime(Runtime):
         return self._cache is not None
 
 
-def _init_tests():
-    return {
+def _init_state():
+    state = State(tempfile.mkdtemp(prefix="groktest-nushell-"))
+    _write_test_config(state)
+    state.env = {
         "TEMP": tempfile.gettempdir(),
         "TEST_TEMP": tempfile.mkdtemp(prefix="groktest-nushell-"),
-        "__cfg__": _write_test_config(),
     }
+    return state
 
 
-def _write_test_config():
-    dir = tempfile.mkdtemp(prefix="groktest-nushell-")
-    filename = os.path.join(dir, "config.nu")
-    with open(filename, "w") as f:
+def _write_test_config(state: State):
+    with open(state.test_config_filename, "w") as f:
         f.write(_CONFIG_TEMPLATE)
-    return filename
 
 
-def _maybe_apply_test_cwd(test: Test, cache: Dict[str, Any]):
-    cache.setdefault("__cwd__", os.path.dirname(test.filename))
+def _apply_test_cwd(test: Test, state: State):
+    if not state.cwd:
+        state.cwd = os.path.dirname(test.filename)
 
 
-def _exec_test_expr(test: Test, cache: Dict[str, Any]):
-    cmd = _test_cmd(test.expr)
-    cwd = _test_cwd(cache)
-    env = _test_env(cache)
+def _apply_vars(state: State):
+    if state.last_saved_vars != state.vars:
+        _write_vars_json(state)
+        _generate_vars_mu(state)
+
+
+def _write_vars_json(state: State):
+    with open(state.vars_json_filename, "w") as f:
+        json.dump(state.vars, f)
+
+
+def _generate_vars_mu(state: State):
+    assert os.path.exists(state.vars_json_filename)
+    cmd = ["nu", "--commands", _format_mu_vars_source_command(state)]
+    subprocess.check_call(cmd)
+
+
+def _format_mu_vars_source_command(state: State):
+    return f"""
+    $"mut vars = (
+        open --raw {state.vars_json_filename}
+        | from json | to nuon
+    )" | save -f {state.vars_nu_filename}
+    """
+
+
+def _exec_test_expr(test: Test, state: State):
+    assert state.cwd
+    assert os.path.exists(state.vars_nu_filename)
+    cmd = [
+        "nu",
+        "--config",
+        state.test_config_filename,
+        "--commands",
+        _format_nu_test_expr_command(test, state),
+    ]
+    cwd = state.cwd
+    env = state.env
     _log_command(cmd, cwd, env)
-    cfg = cache["__cfg__"]
-    p = _open_nu_proc(cmd, cwd, env, cfg)
-    out, err = p.communicate()
-    _log_output(out)
-    result_output, cwd = _parse_output(out)
-    cache["__cwd__"] = cwd
-    return TestResult(p.returncode, result_output)
+    try:
+        p = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=state.cwd,
+            env={**os.environ, **state.env},
+            text=True,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "cannot find 'nu' program\n"
+            "Confirm that Nushell is installed and available on the path"
+        ) from None
+    else:
+        out, err = p.communicate()
+        _log_output(out)
+        result_output, cwd = _parse_output(out)
+        state.cwd = cwd
+        return TestResult(
+            p.returncode,
+            result_output,
+            _maybe_short_error(p.returncode, result_output),
+        )
 
 
-def _test_cmd(expr: str):
-    return f"print (\n{expr}\n); pwd"
+def _maybe_short_error(code: int, output: str):
+    if code != 0 and output.startswith("Error: "):
+        return output.split("\n", 1)[0] + "\n"
+    return None
 
 
-def _test_env(cache: Dict[str, Any]) -> Dict[str, str]:
-    return {name: cache[name] for name in cache if _env_var_name(name)}
+def _format_nu_test_expr_command(test: Test, state: State):
+    return f"""
+    source {state.vars_nu_filename}
+    print (
+        {test.expr}
+    )
+    $env.PWD
+    """
 
 
-def _env_var_name(s: str):
-    return _ENV_VAR_NAME_P.match(s)
-
-
-def _test_cwd(cache: Dict[str, Any]) -> Optional[str]:
-    return cache["__cwd__"]
-
-
-def _log_command(cmd: str, cwd: Optional[str], env: Dict[str, str]):
+def _log_command(cmd: List[str], cwd: str, env: Dict[str, str]):
     if log.getEffectiveLevel() > logging.DEBUG:
         return
     log.debug("Running Nu command:")
@@ -136,23 +211,6 @@ def _log_output(output: str):
     log.debug(textwrap.indent(f"out: {output!r}", "  "))
 
 
-def _open_nu_proc(cmd: str, cwd: Optional[str], env: Dict[str, str], cfg: str):
-    try:
-        return subprocess.Popen(
-            ["nu", "--config", cfg, "-c", cmd],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=cwd,
-            env={**os.environ, **env},
-            text=True,
-        )
-    except FileNotFoundError:
-        raise RuntimeError(
-            "cannot find 'nu' program\n"
-            "Confirm that Nushell is installed and available on the path"
-        ) from None
-
-
 def _parse_output(output: str):
     parts = output.rsplit("\n", 2)
     if parts[-1] != "":
@@ -160,5 +218,9 @@ def _parse_output(output: str):
     if len(parts) == 2:
         return "", parts[0]
     if len(parts) == 3:
-        return parts[0] + "\n", parts[1]
+        return _strip_line_padding(parts[0]) + "\n", parts[1]
     raise AssertionError(repr(output))
+
+
+def _strip_line_padding(s: str):
+    return "\n".join(line.rstrip() for line in s.split("\n"))

@@ -29,7 +29,7 @@ from .__init__ import TestMatch
 from .__init__ import TestOptions
 from .__init__ import TestResult
 
-log = logging.getLogger("groktest.python")
+log = logging.getLogger(__name__)
 
 
 class InitReq:
