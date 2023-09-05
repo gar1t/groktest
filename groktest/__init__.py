@@ -8,6 +8,7 @@ from types import ModuleType
 import configparser
 import copy
 import difflib
+import doctest
 import importlib
 import importlib.util
 import inspect
@@ -257,18 +258,42 @@ PYTHON_SPEC = DEFAULT_SPEC = TestSpec(
     option_candidates=_python_comments,
 )
 
+
+def _gen_comments(comment_marker: str = "#"):
+    def f(s: str):
+        # Naively look for comment marker from right
+        for line in s.split("\n"):
+            parts = line.rsplit("#", 1)
+            if len(parts) > 1:
+                yield parts[1]
+
+    return f
+
+
+NUSHELL_SPEC = TestSpec(
+    runtime="nushell",
+    ps1=">",
+    ps2=":::",
+    test_pattern=DEFAULT_TEST_PATTERN,
+    blankline="⤶",
+    wildcard="...",
+    option_candidates=_gen_comments("#"),
+)
+
 Marker = Any
 
 DOCTEST_MARKER: Marker = object()
 
 SPECS: Dict[str, Union[TestSpec, Marker]] = {
     "python": PYTHON_SPEC,
+    "nushell": NUSHELL_SPEC,
     "doctest": DOCTEST_MARKER,
 }
 
 RUNTIME = {
     "doctest": "groktest.doctest.DoctestRuntime",
     "python": "groktest.python.PythonRuntime",
+    "nushell": "groktest.nushell.NuShellRuntime",
 }
 
 
@@ -720,8 +745,14 @@ def test_file(filename: str, config: Optional[ProjectConfig] = None):
 
 
 def run_test(test: Test, options: TestOptions, state: RunnerState):
-    result = state.runtime.exec_test_expr(test, options)
-    _handle_test_result(result, test, options, state)
+    try:
+        result = state.runtime.exec_test_expr(test, options)
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(e)
+    else:
+        _handle_test_result(result, test, options, state)
 
 
 def _apply_skip_for_solo(tests: List[Test]):
@@ -1314,8 +1345,6 @@ def _find_parse_type_line(type: str, s: str):
 
 
 def _doctest_file(filename: str, config: TestConfig):
-    import doctest
-
     failed, tested = doctest.testfile(
         filename,
         module_relative=False,
