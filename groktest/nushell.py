@@ -50,10 +50,12 @@ $env.config = {
 class State:
     def __init__(self, config_home: str):
         self.config_home = config_home
+        self.test_dir: Optional[str] = None
         self.vars: Dict[str, Any] = {}
         self.last_saved_vars = None
         self.env: Dict[str, str] = {}
         self.cwd: Optional[str] = None
+        self.config: Optional[TestConfig] = None
 
     @property
     def test_config_filename(self):
@@ -78,6 +80,7 @@ class NuShellRuntime(Runtime):
         assert self._state is not None
         self._state.vars.clear()
         self._state.cwd = None
+        self._state.config = config
 
     def exec_test_expr(self, test: Test, options: TestOptions):
         assert self._state
@@ -113,8 +116,8 @@ def _write_test_config(state: State):
 
 
 def _apply_test_cwd(test: Test, state: State):
-    if not state.cwd:
-        state.cwd = os.path.dirname(test.filename)
+    if not state.test_dir:
+        state.test_dir = os.path.dirname(test.filename)
 
 
 def _apply_vars(state: State):
@@ -144,7 +147,7 @@ def _format_mu_vars_source_command(state: State):
 
 
 def _exec_test_expr(test: Test, state: State):
-    assert state.cwd
+    assert state.test_dir
     assert os.path.exists(state.vars_nu_filename)
     cmd = [
         "nu",
@@ -153,7 +156,7 @@ def _exec_test_expr(test: Test, state: State):
         "--commands",
         _format_nu_test_expr_command(test, state),
     ]
-    cwd = state.cwd
+    cwd = state.test_dir
     env = state.env
     _log_command(cmd, cwd, env)
     try:
@@ -161,7 +164,7 @@ def _exec_test_expr(test: Test, state: State):
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            cwd=state.cwd,
+            cwd=cwd,
             env={**os.environ, **state.env},
             text=True,
         )
@@ -190,13 +193,31 @@ def _maybe_short_error(code: int, output: str):
 
 def _format_nu_test_expr_command(test: Test, state: State):
     return f"""
-    source {state.vars_nu_filename}
+    {_init_commands(state)}
+    {_source_vars_command(state)}
+    {_cd_command(state)}
     print (
         {test.expr}
     )
     $env.PWD
     """
 
+def _init_commands(state: State):
+    if not state.config:
+        return ""
+    try:
+        return state.config["nushell"]["init"]
+    except KeyError:
+        return ""
+
+def _source_vars_command(state: State):
+    return f"source {state.vars_nu_filename}"
+
+
+def _cd_command(state: State):
+    if not state.cwd:
+        return ""
+    return f"cd `{state.cwd}`"
 
 def _log_command(cmd: List[str], cwd: str, env: Dict[str, str]):
     if log.getEffectiveLevel() > logging.DEBUG:

@@ -459,10 +459,42 @@ def _simplified_yaml_val(s: str):
 
 def _spec_for_front_matter(fm: Any, filename: str):
     return (
-        _default_spec_for_missing_or_invalid_front_matter(fm, filename)
-        or _spec_for_test_type(fm, filename)
+        _spec_for_front_matter_test_type(fm, filename)
+        or _spec_for_project_default_type(filename)
+        or _default_spec_for_missing_or_invalid_front_matter(fm, filename)
         or DEFAULT_SPEC
     )
+
+
+def _spec_for_front_matter_test_type(fm: Dict[str, Any], filename: str):
+    if not isinstance(fm, dict):
+        return None
+    try:
+        test_type = fm["tool"]["groktest"]["type"]
+    except KeyError:
+        test_type = fm.get("test-type")
+    if not test_type:
+        return None
+    return _spec_for_type(test_type)
+
+
+def _spec_for_type(type: str):
+    try:
+        return SPECS[type]
+    except KeyError:
+        raise TestTypeNotSupported(type) from None
+
+
+def _spec_for_project_default_type(filename: str):
+    config = _try_test_file_project_config(filename)
+    if not config:
+        return None
+    try:
+        default_type = config["default-type"]
+    except KeyError:
+        return None
+    else:
+        return _spec_for_type(default_type)
 
 
 def _default_spec_for_missing_or_invalid_front_matter(fm: Any, filename: str):
@@ -474,20 +506,6 @@ def _default_spec_for_missing_or_invalid_front_matter(fm: Any, filename: str):
         )
         return DEFAULT_SPEC
     return None
-
-
-def _spec_for_test_type(fm: Dict[str, Any], filename: str):
-    assert isinstance(fm, dict)
-    try:
-        test_type = fm["tool"]["groktest"]["type"]
-    except KeyError:
-        test_type = fm.get("test-type")
-    if not test_type:
-        return None
-    try:
-        return SPECS[test_type]
-    except KeyError:
-        raise TestTypeNotSupported(test_type) from None
 
 
 def parse_tests(content: str, spec: TestSpec, filename: str):
@@ -620,6 +638,7 @@ FRONT_MATTER_TO_CONFIG = {
     "parse-functions": ["parse", "functions"],
     "python-init": ["python", "init"],
     "test-options": ["options"],
+    "nushell-init": ["nushell", "init"],
 }
 
 
@@ -689,14 +708,18 @@ def _coerce_list(x: Any) -> List[Any]:
 
 def _try_test_file_project_config(filename: str):
     for dirname in _iter_parents(filename):
-        path = os.path.join(dirname, "pyproject.toml")
-        try:
-            return load_project_config(path)
-        except FileNotFoundError:
-            pass
-        except ProjectDecodeError as e:
-            log.warning("Error loading project config from %s: %s", path, e)
-            break
+        paths = [
+            os.path.join(dirname, "pyproject.toml"),
+            os.path.join(dirname, "Cargo.toml"),
+        ]
+        for path in paths:
+            try:
+                return load_project_config(path)
+            except FileNotFoundError:
+                pass
+            except ProjectDecodeError as e:
+                log.warning("Error loading project config from %s: %s", path, e)
+                break
     return None
 
 
@@ -780,7 +803,9 @@ def _handle_test_result(
 ):
     expected = _format_match_expected(test, options, state.spec)
     output_candidates = _match_test_output_candidates(result, test, options)
-    match, match_output = _try_match_output_candidates(output_candidates, expected, test, state)
+    match, match_output = _try_match_output_candidates(
+        output_candidates, expected, test, state
+    )
     _log_test_result_match(match, result, test, expected, match_output, state)
     if options.get("fails"):
         if match.match:
@@ -809,9 +834,6 @@ def _log_test_result_match(
     log.debug("  test output [%r]: %r", result.code, result.output)
     log.debug("  used expected:   %r", used_expected)
     log.debug("  used output:     %r", used_test_output)
-
-
-
 
 
 def _try_match_output_candidates(

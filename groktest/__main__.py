@@ -149,7 +149,11 @@ def _try_project_config(args: Any):
 
 
 def _project_candidate(path_arg: str):
-    paths = [path_arg, os.path.join(path_arg, "pyproject.toml")]
+    paths = [
+        path_arg,
+        os.path.join(path_arg, "pyproject.toml"),
+        os.path.join(path_arg, "Cargo.toml"),
+    ]
     for path in paths:
         if path[-5:].lower() == ".toml" and os.path.isfile(path):
             return path
@@ -161,7 +165,9 @@ def _test_filenames(config: Optional[ProjectConfig], args: Any):
         return args.paths
     include = _coerce_list(config.get("include"))
     if not include:
-        raise SystemExit(f"Missing 'include' in 'tool.groktest' section in {config['__src__']}")
+        raise SystemExit(
+            f"Missing 'include' in 'tool.groktest' section in {config['__src__']}"
+        )
     basepath = os.path.dirname(config["__src__"])
     exclude = _coerce_list(config.get("exclude"))
     return _filenames_for_test_patterns(include, exclude, basepath)

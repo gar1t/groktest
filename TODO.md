@@ -27,6 +27,16 @@
 
 - Support debugging (i.e. calls to `breakpoint()` should work!)
 
+- Nushell should retain vars across tests
+
+- Look for other project config toml files not just pyproject! E.g.
+  `Cargo.toml` is used for Rust projects. What other project config toml
+  files are there? (this is hacked for Cargo.toml but it needs cleanup:
+  consolidate logic of finding a project toml and figure out a
+  generalized pattern rather than hard coding filenames - unless there
+  is no standard and there are only a couple toml files - but what about
+  a shell project??)
+
 ## Tags and deps
 
 Tags per test in front-matter.
