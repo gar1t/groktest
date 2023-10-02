@@ -37,6 +37,11 @@
   is no standard and there are only a couple toml files - but what about
   a shell project??)
 
+- Whitespace on right of line cannot be matched - how does doctest
+  handle this? Auto strip? We need a marker like blankline.
+
+- Use rich for progress (useful for parallel tests when they land)
+
 ## Tags and deps
 
 Tags per test in front-matter.
@@ -103,6 +108,7 @@ Cleanup test report scheme:
 
 - Per file is easy - it's isolated per runtime
 - Use technique used in Guild - simple and it works
+- Use rich progress for concurrent progress status
 
 ## Method to quickly disable tests at a point
 
