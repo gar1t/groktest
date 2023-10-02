@@ -32,7 +32,7 @@ def main():
 
     failed = tested = 0
 
-    for filename in _test_filenames(config, args):
+    for filename in sorted(_test_filenames(config, args)):
         relname = os.path.relpath(filename)
         if args.preview:
             print(f"Testing {relname} (preview)")
