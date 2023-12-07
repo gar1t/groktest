@@ -337,7 +337,7 @@ def _compile_test_expr(test: TestReq):
     if not _wants_pretty_print(test.options):
         return _gen_compile_test_expr("single", test)
 
-    # Test wants pretty print - try 'eval' mode
+    # Wants pretty print - try 'eval' mode
     try:
         return _gen_compile_test_expr("eval", test)
     except SyntaxError:
