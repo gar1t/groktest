@@ -24,6 +24,7 @@ from . import _vendor_parse as parselib
 from . import _vendor_tomli as toml
 
 __all__ = [
+    "__version__",
     "DEFAULT_SPEC",
     "PYTHON_SPEC",
     "RUNTIME",
@@ -48,6 +49,9 @@ __all__ = [
     "start_runtime",
     "test_file",
 ]
+
+__version__ = "0.1.4"  # Sync with pyproject.toml
+
 
 log = logging.getLogger("groktest")
 

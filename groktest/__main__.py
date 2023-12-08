@@ -9,8 +9,10 @@ import glob
 import json
 import logging
 import os
+import sys
 import tempfile
 
+from .__init__ import __version__
 from .__init__ import test_file
 from .__init__ import load_project_config
 from .__init__ import ProjectDecodeError
@@ -23,9 +25,12 @@ EXIT_FAILED = 1
 EXIT_NO_TESTS = 2
 
 
-def main():
+def main(args: Any = None):
+    args = args or sys.argv[1:]
     p = _init_parser()
-    args = p.parse_args()
+    args = p.parse_args(args)
+    if args.version:
+        _print_version_and_exit()
 
     _init_logging(args)
 
@@ -64,6 +69,11 @@ def main():
         raise SystemExit(EXIT_FAILED)
 
 
+def _print_version_and_exit():
+    print(f"Groktest {__version__}")
+    raise SystemExit(0)
+
+
 def _init_logging(args: Any):
     from .__init__ import __name__
 
@@ -83,6 +93,7 @@ def _init_parser():
         help="Project suite or files to test.",
         nargs="*",
     )
+    p.add_argument("--version", action="store_true", help="Show version and exit.")
     p.add_argument(
         "-h",
         "--help",

@@ -62,3 +62,24 @@ Run the tests.
     >>> run_main([test_empty])
     <exit 2>
 
+## Version
+
+Groktest version is defined in two locations: `pyproject.toml` and in
+the `__main__` module. The duplication eliminates the complexity of
+sharing a single definition but adds the need to manually synchronize
+the values.
+
+This test checks that they are the same.
+
+    >>> import groktest, tomli, os
+
+    >>> config_src = os.path.join(
+    ...     os.path.dirname(os.path.dirname(groktest.__file__)),
+    ...     "pyproject.toml")
+    >>> config = tomli.load(open(config_src, "rb"))
+
+    >>> project_ver = config["project"]["version"]
+    >>> src_ver = groktest.__version__
+
+    >>> src_ver == project_ver, (src_ver, project_ver)
+    (True, ...)
