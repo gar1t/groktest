@@ -19,6 +19,9 @@ from .__init__ import TestTypeNotSupported
 # Defer init to `_init_logging()`
 log: logging.Logger = cast(logging.Logger, None)
 
+EXIT_FAILED = 1
+EXIT_NO_TESTS = 2
+
 
 def main():
     p = _init_parser()
@@ -53,10 +56,12 @@ def main():
     assert failed <= tested, (failed, tested)
     if tested == 0:
         print("Nothing tested 😴")
+        raise SystemExit(EXIT_NO_TESTS)
     elif failed == 0:
         print("All tests passed 🎉")
     else:
         print("Tests failed 💥 (see above for details)")
+        raise SystemExit(EXIT_FAILED)
 
 
 def _init_logging(args: Any):
