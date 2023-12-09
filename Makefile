@@ -9,3 +9,6 @@ clean:
 
 upload:
 	python -m twine upload dist/*
+
+test:
+	python -m groktest .
