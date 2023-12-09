@@ -1,5 +1,9 @@
 # Groktest To Do
 
+- Use Groktest to test itself
+  - Move docs to groktest
+  - Make sure we have doctest coverage elsewhere
+
 - Ignore exception detail by default and `-error-detail` option to
   disable that?
 

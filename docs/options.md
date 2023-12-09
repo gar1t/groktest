@@ -47,7 +47,7 @@ enabled or disabled, When enabled, an option may have a value.
 
   Similar in application to `+skip` but asserts an expected failure.
 
-- `solo` (NOT YET IMPLEMENTED)
+- `solo`
 
   Run only tests enabled for solo, if any are enabled. Defaults to
   disabled.
@@ -84,7 +84,7 @@ enabled or disabled, When enabled, an option may have a value.
   To disregard whitespace in matches, disable the option using
   `-space`.
 
-- `paths` (NOT YET IMPLEMENTED)
+- `paths`
 
   Normalize paths to be `/` or `\`. Defaults to disabled and `/` if
   enabled without an explicit value.
