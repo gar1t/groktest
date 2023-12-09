@@ -364,10 +364,23 @@ def _format_test_sourcecode(test: TestReq):
     we want to refer to the test source code file (filename) and the
     correct line number in that file. Empty lines is a convenient way to
     offset the line number accordingly.
+
+    If the test expression is a comment, prepends "None " to the
+    expression to coerce it to a parsable Python expression with the
+    expected value of `None`.
     """
+    expr = _coerce_comment(test.expr)
     if not test.filename or not test.line:
-        return test.expr
-    return "\n" * (test.line - 1) + test.expr
+        return expr
+    return "\n" * (test.line - 1) + expr
+
+
+def _coerce_comment(expr: str):
+    return f"None {expr}" if _is_comment(expr) else expr
+
+
+def _is_comment(expr: str):
+    return all(line.lstrip()[:1] == "#" for line in expr.split("\n"))
 
 
 def _test_filename(test: TestReq):

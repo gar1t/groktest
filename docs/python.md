@@ -149,6 +149,13 @@ used as specified.
     AssertionError: x = 1
     <BLANKLINE>
 
+### Special handling for comments
+
+The Python runtime treats comments as implicit `None` values.
+
+    >>> run_test(">>> # This is a comment")
+    <BLANKLINE>
+
 ## Stopping a runtime
 
 The Python runtime should be stopped when no longer needed.

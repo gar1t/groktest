@@ -130,7 +130,13 @@ Cleanup test report scheme:
       Traceback (most recent call last):
       NameError: name 'missing' is not defined
 
+      >>> # -skiprest
+
 ## Property based testing (speculative futurism)
+
+These tests are skipped as they're purely speculative.
+
+    >>> # +skiprest
 
 From the Quick Start
 [example](https://hypothesis.readthedocs.io/en/latest/quickstart.html)
