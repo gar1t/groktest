@@ -795,7 +795,10 @@ def _apply_skip_rest(options: TestOptions, state: RunnerState):
 
 
 def _skip_test(options: TestOptions, state: RunnerState):
-    return _option_value("skip", options, state.skip_rest)
+    val = _option_value("skip", options, state.skip_rest)
+    if isinstance(val, str):
+        return bool(os.getenv(val))
+    return val
 
 
 def _handle_test_skipped(test: Test, state: RunnerState):
