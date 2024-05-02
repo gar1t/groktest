@@ -33,12 +33,11 @@ def main(args: Any = None):
         _print_version_and_exit()
 
     _init_logging(args)
-
     _apply_last(args)
+    config = _init_config(args)
 
-    config = _try_project_config(args)
-
-    failed = tested = 0
+    failed = tested = skipped = 0
+    failed_files = []
 
     for filename in sorted(_test_filenames(config, args)):
         relname = os.path.relpath(filename)
@@ -55,17 +54,37 @@ def main(args: Any = None):
         except TestTypeNotSupported as e:
             log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
         else:
-            failed += result["failed"]
-            tested += result["tested"]
+            if result.failed:
+                failed_files.append(filename)
+            failed += result.failed
+            tested += result.tested
+            skipped += result.skipped
 
     assert failed <= tested, (failed, tested)
+    _print_results(failed, tested, skipped, failed_files)
+
+
+def _print_results(failed: int, tested: int, skipped: int, failed_files: list[str]):
+    hr = "-" * 70
+    print(hr)
+    if skipped:
+        print(f"{skipped} {'test' if skipped == 1 else 'tests'} skipped")
     if tested == 0:
+        assert not failed_files
         print("Nothing tested 😴")
         raise SystemExit(EXIT_NO_TESTS)
     elif failed == 0:
+        assert not failed_files
         print("All tests passed 🎉")
     else:
-        print("Tests failed 💥 (see above for details)")
+        assert failed_files
+        print(
+            f"{failed} {'test' if failed == 1 else 'tests'} failed "
+            f"in {len(failed_files)} {'file' if len(failed_files) == 1 else 'files'} "
+            "💥 (see above for details)"
+        )
+        for filename in failed_files:
+            print(f" - {filename}")
         raise SystemExit(EXIT_FAILED)
 
 
@@ -93,7 +112,11 @@ def _init_parser():
         help="Project suite or files to test.",
         nargs="*",
     )
-    p.add_argument("--version", action="store_true", help="Show version and exit.")
+    p.add_argument(
+        "--version",
+        action="store_true",
+        help="Show version and exit.",
+    )
     p.add_argument(
         "-h",
         "--help",
@@ -106,8 +129,22 @@ def _init_parser():
         action="store_true",
         help="Show tests without running them.",
     )
-    p.add_argument("--last", action="store_true", help="Re-run last tests.")
-    p.add_argument("--debug", action="store_true", help="Show debug info.")
+    p.add_argument(
+        "--last",
+        action="store_true",
+        help="Re-run last tests.",
+    )
+    p.add_argument(
+        "-F",
+        "--failfast",
+        action="store_true",
+        help="Stop on the first error for a file.",
+    )
+    p.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show debug info.",
+    )
     return p
 
 
@@ -145,14 +182,16 @@ def _save_last_cmd(args: Any):
             json.dump(args.paths, f)
 
 
-def _try_project_config(args: Any):
+def _init_config(args: Any):
+    config: ProjectConfig = {}
+    _apply_args_config(args, config)
     if not args.paths:
-        return None
+        return config
     project_path = _project_candidate(args.paths[0])
     if not project_path:
-        return None
+        return config
     try:
-        config = load_project_config(project_path)
+        _apply_project_config(load_project_config(project_path), config)
     except ProjectDecodeError as e:
         log.debug("Error loading project config from %s: %s", project_path, e)
     else:
@@ -161,7 +200,23 @@ def _try_project_config(args: Any):
                 f"extra arguments '{' '.join(args.paths[1:])}' to project "
                 "path not currently supported"
             )
-        return config
+    return cast(ProjectConfig, config)
+
+
+def _apply_args_config(args: Any, config: ProjectConfig):
+    if args.failfast:
+        config["failfast"] = True
+
+
+def _apply_project_config(src: dict[str, Any], dest: dict[str, Any]):
+    for key, src_val in src.items():
+        try:
+            dest_val = dest[key]
+        except KeyError:
+            dest[key] = src_val
+        else:
+            if isinstance(dest_val, dict) and isinstance(src_val, dict):
+                _apply_project_config(src_val, dest_val)
 
 
 def _project_candidate(path_arg: str):
@@ -177,7 +232,7 @@ def _project_candidate(path_arg: str):
 
 
 def _test_filenames(config: Optional[ProjectConfig], args: Any):
-    if config is None:
+    if not config:
         return args.paths
     include = _coerce_list(config.get("include"))
     if not include:

@@ -51,8 +51,7 @@ __all__ = [
     "test_file",
 ]
 
-__version__ = "0.1.5"  # Sync with pyproject.toml
-
+__version__ = "0.2.0"  # Sync with pyproject.toml
 
 log = logging.getLogger("groktest")
 
@@ -88,6 +87,19 @@ ParseTypeFunction = Callable[[str], Any]
 ParseTypeFunctions = Dict[str, ParseTypeFunction]
 
 
+class TestResults:
+    failed: int = 0
+    tested: int = 0
+    skipped: int = 0
+
+    def __repr__(self):
+        return (
+            f"<TestResults failed={self.failed} "
+            f"tested={self.tested} "
+            f"skipped={self.skipped}>"
+        )
+
+
 class TestSpec:
     def __init__(
         self,
@@ -112,9 +124,6 @@ class TestSpec:
         self.blankline = blankline
         self.wildcard = wildcard
         self.option_candidates = option_candidates
-
-
-TestOptions = Dict[str, Any]
 
 
 class TestMatch:
@@ -212,7 +221,7 @@ class RunnerState:
         self.spec = spec
         self.filename = filename
         self.config = config
-        self.results: Dict[str, Any] = {"failed": 0, "tested": 0, "skipped": 0}
+        self.results = TestResults()
         self.skip_rest = False
 
 
@@ -220,6 +229,7 @@ class DocTestRunnerState:
     def __init__(self, filename: str, config: TestConfig):
         self.filename = filename
         self.config = config
+        self.results = TestResults()
 
 
 DEFAULT_TEST_PATTERN = r"""
@@ -730,7 +740,8 @@ def start_runtime(name: str, config: Optional[TestConfig] = None):
 def test_file(filename: str, config: Optional[ProjectConfig] = None):
     state = init_runner_state(filename, config)
     if isinstance(state, DocTestRunnerState):
-        return _doctest_file(state.filename, state.config)
+        _doctest_file(state)
+        return state.results
     assert isinstance(state, RunnerState)
     assert state.runtime.is_available
     state.runtime.init_for_tests(state.config)
@@ -777,7 +788,7 @@ def _skip_test(options: TestOptions, state: RunnerState):
 
 
 def _handle_test_skipped(test: Test, state: RunnerState):
-    state.results["skipped"] += 1
+    state.results.skipped += 1
 
 
 def _handle_test_result(
@@ -793,7 +804,7 @@ def _handle_test_result(
         if match.match:
             _handle_unexpected_test_pass(test, options, state)
         else:
-            _handle_expected_test_failed(test, state)
+            _handle_expected_test_failed(test, options, state)
     elif match.match:
         _handle_test_passed(test, match, state)
     else:
@@ -840,12 +851,14 @@ def _handle_unexpected_test_pass(test: Test, options: TestOptions, state: Runner
     print("Failed example:")
     _print_test_expr(test.expr)
     print("Expected test to fail but passed")
-    state.results["failed"] += 1
-    state.results["tested"] += 1
+    state.results.failed += 1
+    state.results.tested += 1
 
 
-def _handle_expected_test_failed(test: Test, state: RunnerState):
-    state.results["tested"] += 1
+def _handle_expected_test_failed(test: Test, options: TestOptions, state: RunnerState):
+    state.results.tested += 1
+    if options.get("failfast"):
+        state.skip_rest = True
 
 
 def _format_match_expected(test: Test, options: TestOptions, spec: TestSpec):
@@ -1219,7 +1232,7 @@ def _default_str_match(
 
 def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
     state.runtime.handle_test_match(match)
-    state.results["tested"] += 1
+    state.results.tested += 1
 
 
 def _handle_test_failed(
@@ -1231,8 +1244,10 @@ def _handle_test_failed(
 ):
     _print_failed_test_sep(options)
     _print_failed_test(test, match, result, options, state.spec)
-    state.results["failed"] += 1
-    state.results["tested"] += 1
+    state.results.failed += 1
+    state.results.tested += 1
+    if options.get("failfast"):
+        state.skip_rest = True
 
 
 def _print_failed_test_sep(options: TestOptions):
@@ -1355,14 +1370,14 @@ def _find_parse_type_line(type: str, s: str):
     return None
 
 
-def _doctest_file(filename: str, config: TestConfig):
+def _doctest_file(state: DocTestRunnerState):
     failed, tested = doctest.testfile(
-        filename,
+        state.filename,
         module_relative=False,
-        optionflags=_doctest_options(config),
-        extraglobs=_doctest_globals(config),
+        optionflags=_doctest_options(state.config),
     )
-    return {"failed": failed, "tested": tested}
+    state.results.failed += failed
+    state.results.tested += tested
 
 
 def _doctest_options(config: TestConfig):
@@ -1391,25 +1406,13 @@ def _iter_doctest_opts(opts: str) -> Generator[Tuple[int, bool], None, None]:
             pass
 
 
-def _doctest_globals(config: Any):
-    from pprint import pprint as pprint0
-
-    def pprint(s: str, **kw: Any):
-        kw = dict(width=72, **kw)
-        pprint0(s, **kw)
-
-    return {
-        "pprint": pprint,
-    }
-
-
 def load_project_config(filename: str):
     try:
         data = _load_toml(filename)
     except toml.TOMLDecodeError as e:
         raise ProjectDecodeError(e, filename) from None
     else:
-        return _project_config_for_data(data) if data else None
+        return _project_config_for_data(data)
 
 
 def _load_toml(filename: str):
@@ -1423,6 +1426,11 @@ def _load_toml(filename: str):
         except toml.TOMLDecodeError:
             raise
         else:
+            if not isinstance(data, dict):
+                raise SystemExit(
+                    f"Unexpected config in {filename}: expected "
+                    f"mapping but got {type(data).__name__}"
+                )
             log.debug("Using project config in %s", filename)
             data["__src__"] = filename
             return data
@@ -1432,7 +1440,7 @@ def _project_config_for_data(data: Dict[str, Any]):
     try:
         groktest_data = data["tool"]["groktest"]
     except KeyError:
-        return None
+        return cast(ProjectConfig, {})
     else:
         groktest_data["__src__"] = data["__src__"]
         return cast(ProjectConfig, groktest_data)
