@@ -96,6 +96,13 @@ enabled or disabled, When enabled, an option may have a value.
 
   Runtimes supported: Python
 
+- `stderr`
+
+  Capture standard error as well as standard output in the expected
+  output.
+
+  Runtimes supported: Python
+
 ## Parsing options
 
 Groktest uses the private function `_parse_config_options`.

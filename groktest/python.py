@@ -206,6 +206,22 @@ def _write_vars_req(vars: Dict[str, Any], out: IO[str]):
     _write_req(req, out)
 
 
+def _parse_args():
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument("--debug", action="store_true")
+    return p.parse_args()
+
+
+def _init_logging():
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.WARNING,
+        format="%(levelname)s: [%(name)s] %(message)s",
+    )
+    globals()["log"] = logging.getLogger("groktest.python")
+
+
 def _main_loop():
     globals = {}
     while True:
@@ -214,11 +230,11 @@ def _main_loop():
             break
         req = _decode_request(line)
         if isinstance(req, TestReq):
-            _handle_test(req, globals)
+            _handle_test_req(req, globals)
         elif isinstance(req, VarsReq):
-            _handle_vars(req, globals)
+            _handle_vars_req(req, globals)
         elif isinstance(req, InitReq):
-            _handle_init(req, globals)
+            _handle_init_req(req, globals)
         else:
             assert False, req
 
@@ -244,9 +260,9 @@ def _decode_request(line: str):
         assert False, data
 
 
-def _handle_test(test: TestReq, globals: Dict[str, Any]):
+def _handle_test_req(test: TestReq, globals: Dict[str, Any]):
     _log_test(test)
-    with _StdOutCapture() as out:
+    with _StdOutCapture(test.options) as out:
         try:
             _exec_test(test, globals)
         except:
@@ -278,18 +294,56 @@ def _log_test_result(test: TestReq, output: str, exc_info: Any):
 
 
 class _StdOutCapture(io.StringIO):
-    _real_stdout = None
+    _stdout_save = None
+    _stderr_save = None
+    _log_handlers_save = None
+
+    def __init__(self, options: TestOptions):
+        super().__init__()
+        self._capture_stderr = options.get("stderr")
 
     def __enter__(self):
-        assert not self._real_stdout
-        self._real_stdout = sys.stdout
+        assert self._stdout_save is None
+        assert self._stderr_save is None
+        assert self._log_handlers_save is None
+        self._stdout_save = sys.stdout
         sys.stdout = self
+        if self._capture_stderr:
+            self._stderr_save = sys.stderr
+            sys.stderr = self
+            self._log_handlers_save = _set_log_handlers(self)
         return self
 
     def __exit__(self, *exc: Any):
-        assert self._real_stdout
-        sys.stdout = self._real_stdout
-        self._real_stdout = None
+        assert self._stdout_save is not None
+        sys.stdout = self._stdout_save
+        self._stdout_save = None
+        if self._stderr_save:
+            assert self._stderr_save is not None
+            sys.stderr = self._stderr_save
+            self._stderr_save = None
+            assert self._log_handlers_save is not None
+            _restore_log_handlers(self._log_handlers_save)
+
+
+def _set_log_handlers(stream: IO[str]):
+    handlers: list[tuple[logging.Logger, list[logging.Handler]]] = []
+    cur = log
+    while cur:
+        handlers.append((cur, cur.handlers))
+        cur.handlers = [
+            logging.StreamHandler(stream) if hasattr(h, "stream") else h
+            for h in cur.handlers
+        ]
+        cur = cur.parent
+    return handlers
+
+
+def _restore_log_handlers(
+    log_handlers: list[tuple[logging.Logger, list[logging.Handler]]]
+):
+    for logger, handlers in log_handlers:
+        logger.handlers = handlers
 
 
 def _exec_test(test: TestReq, globals: Dict[str, Any]):
@@ -489,7 +543,7 @@ def _writeline(line: str):
     sys.stdout.flush()
 
 
-def _handle_vars(vars: VarsReq, globals: Dict[str, Any]):
+def _handle_vars_req(vars: VarsReq, globals: Dict[str, Any]):
     _log_vars(vars)
     globals.update(vars.vars)
     _writeline(_encode_ack())
@@ -499,7 +553,7 @@ def _log_vars(vars: VarsReq):
     log.debug("Updating variables: %r", vars.vars)
 
 
-def _handle_init(init: InitReq, globals: Dict[str, Any]):
+def _handle_init_req(init: InitReq, globals: Dict[str, Any]):
     _log_init(init)
     globals.clear()
     try:
@@ -519,17 +573,6 @@ def _encode_ack():
 
 
 if __name__ == "__main__":
-    import argparse
-
-    p = argparse.ArgumentParser()
-    p.add_argument("--debug", action="store_true")
-    args = p.parse_args()
-
-    logging.basicConfig(
-        level=logging.DEBUG if args.debug else logging.WARNING,
-        format="%(levelname)s: [%(name)s] %(message)s",
-    )
-
-    globals()["log"] = logging.getLogger("groktest.python")
-
+    args = _parse_args()
+    _init_logging()
     _main_loop()
