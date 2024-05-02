@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import *
 from types import ModuleType
 
-import configparser
 import copy
 import difflib
 import doctest
@@ -19,6 +18,8 @@ import os
 import re
 import sys
 import tokenize
+
+import yaml
 
 from . import _vendor_parse as parselib
 from . import _vendor_tomli as toml
@@ -343,105 +344,79 @@ def _parse_front_matter(s: str, filename: str):
     this case, front matter configuration is limited to simple key value
     pairs using `<key>: <value>` syntax.
     """
-    data = _parsed_front_matter(s, filename) or _empty_front_matter(filename)
-    data["__src__"] = filename
-    return data
+    return cast(
+        FrontMatter,
+        {
+            **_parsed_front_matter(s, filename),
+            "__src__": filename,
+        },
+    )
 
 
 def _parsed_front_matter(s: str, filename: str):
     m = _FRONT_MATTER_P.match(s)
     if not m:
-        return None
-    fm = m.group(1)
-    return (
-        _try_parse_json(fm, filename)
-        or _try_parse_toml(fm, filename)
-        or _try_parse_full_yaml(fm, filename)
-        or _try_parse_simplified_yaml(fm, filename)
-    )
-
-
-def _empty_front_matter(filename: str):
-    log.debug("Missing or unparsable front matter for %s", filename)
-    return cast(FrontMatter, {})
-
-
-def _try_parse_json(s: str, filename: str, raise_error: bool = False):
+        return cast(FrontMatter, {})
+    s = m.group(1)
     try:
-        data = json.loads(s)
-    except Exception as e:
-        if raise_error:
-            raise
-        log.debug("ERROR parsing JSON for %s: %s", filename, e)
-        return None
+        data = _try_parsers([_parse_json, _parse_toml, _parse_yaml], s, filename)
+    except ValueError as e:
+        log.warning(
+            "Unable to parse front matter in %s - verify valid JSON, TOML, or YAML",
+            filename,
+        )
+        return cast(FrontMatter, {})
     else:
-        log.debug("Parsed JSON for %s: %r", filename, data)
-        return cast(FrontMatter, data)
-
-
-def _try_parse_toml(s: str, filename: str, raise_error: bool = False):
-    try:
-        data = toml.loads(s)
-    except toml.TOMLDecodeError as e:
-        if raise_error:
-            raise
-        log.debug("ERROR parsing TOML front matter for %s: %s", filename, e)
-        return None
-    else:
-        log.debug("Parsed TOML front matter for %s: %r", filename, data)
-        return cast(FrontMatter, data)
-
-
-def _try_parse_full_yaml(s: str, filename: str, raise_error: bool = False):
-    try:
-        import yaml  # type: ignore
-    except ImportError:
-        if raise_error:
-            raise
-        log.debug("yaml module not available, skipping full YAML for %s", filename)
-        return None
-    try:
-        data = yaml.safe_load(s)
-    except Exception as e:
-        if raise_error:
-            raise
-        log.debug("ERROR parsing YAML front matter for %s: %s", filename, e)
-        return None
-    else:
-        log.debug("Parsed YAML front matter  for %s: %r", filename, data)
+        if isinstance(data, str):
+            log.warning(
+                "Unable to parse front matter in %s - verify valid JSON, TOML, or YAML",
+                filename,
+            )
+            return cast(FrontMatter, {})
         if not isinstance(data, dict):
             log.warning(
-                "Unsupported front-matter in %s: expected mapping, got %s",
+                "Invalid front matter in %s, expected mapping but got %s",
                 filename,
                 type(data).__name__,
             )
-            return None
-        return cast(FrontMatter, data)
+            return cast(FrontMatter, {})
+    return cast(FrontMatter, data)
 
 
-def _try_parse_simplified_yaml(s: str, filename: str, raise_error: bool = False):
-    parser = configparser.ConfigParser()
+Parser = Callable[[str, str], FrontMatter]
+
+
+def _try_parsers(parsers: list[Parser], s: str, filename: str):
+    for p in parsers:
+        try:
+            return p(s, filename)
+        except ValueError:
+            pass
+    raise ValueError()
+
+
+def _parse_json(s: str, filename: str):
     try:
-        parser.read_string("[__anonymous__]\n" + s)
-    except configparser.Error as e:
-        if raise_error:
-            raise
-        log.debug("ERROR parsing simplified YAML for %s: %s", filename, e)
-        return None
-    else:
-        data = _simplified_yaml_for_ini(parser)
-        log.debug("Parsed simplified YAML front matter for %s: %r", filename, data)
-        return cast(FrontMatter, data)
+        return json.loads(s)
+    except Exception as e:
+        log.debug("ERROR parsing JSON front matter for %s: %s", filename, e)
+        raise ValueError(e) from None
 
 
-def _simplified_yaml_for_ini(parser: configparser.ConfigParser):
-    parsed = {
-        section: dict(
-            {key: _simplified_yaml_val(val) for key, val in parser[section].items()}
-        )
-        for section in parser
-    }
-    return parsed.get("__anonymous__", {})
+def _parse_toml(s: str, filename: str):
+    try:
+        return toml.loads(s)
+    except toml.TOMLDecodeError as e:
+        log.debug("ERROR parsing TOML front matter for %s: %s", filename, e)
+        raise ValueError(e) from None
+
+
+def _parse_yaml(s: str, filename: str):
+    try:
+        return yaml.safe_load(s)
+    except Exception as e:
+        log.debug("ERROR parsing YAML front matter for %s: %s", filename, e)
+        raise ValueError(e) from None
 
 
 def _simplified_yaml_val(s: str):

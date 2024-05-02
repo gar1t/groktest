@@ -1,7 +1,3 @@
----
-test-type: doctest
----
-
 # Front matter
 
 Front matter is denoted by a line `---` at the start of the file
@@ -90,20 +86,20 @@ Matches:
 The function `_parse_front_matter()` parses front matter specified in a
 string.
 
-    >>> def fm(s: str):
-    ...     pprint(groktest._parse_front_matter(s, "<test>"))
+    >>> def front_matter(s: str):
+    ...     return groktest._parse_front_matter(s, "<test>")
 
 Missing front matter:
 
-    >>> fm("")
+    >>> front_matter("")
     {'__src__': '<test>'}
 
-    >>> fm("Nothing to see here")
+    >>> front_matter("Nothing to see here")
     {'__src__': '<test>'}
 
 Groktest does not consider Markdown "comments" as 'empty lines'.
 
-    >>> fm("""
+    >>> front_matter("""
     ... <!-- This is a valid comment in Markdown -->
     ... ---
     ... foo: 123 # Not parsed as Groktest front matter
@@ -111,52 +107,79 @@ Groktest does not consider Markdown "comments" as 'empty lines'.
     ... """)
     {'__src__': '<test>'}
 
-Simple YAML:
+YAML:
 
-    >>> fm("""
+    >>> front_matter("""
     ... ---
     ... foo: 123
     ... bar: hello
     ... ---
-    ... """)
+    ... """)  # +pprint
     {'__src__': '<test>', 'bar': 'hello', 'foo': 123}
 
 JSON:
 
-    >>> fm("""
+    >>> front_matter("""
     ... ---
     ... {
     ...   "foo": 123,
     ...   "bar": "hello"
     ... }
     ... ---
-    ... """)
+    ... """)  # +pprint
     {'__src__': '<test>', 'bar': 'hello', 'foo': 123}
 
 TOML:
 
-    >>> fm("""
+    >>> front_matter("""
     ... ---
     ... foo = 123
-    ... bar = hello
+    ... bar = "hello"
     ... ---
-    ... """)
+    ... """)  # +pprint
     {'__src__': '<test>', 'bar': 'hello', 'foo': 123}
 
-## Simplified YAML
+Front matter must be mapping (dict).
 
-Groktest supports simplified YAML front matter so as not to rely on
-external libraries such as PyYAML. PyYAML is required for full YAML
-support. See [yaml.md](yaml.md) for details on parsing full YAML.
+    >>> front_matter("""
+    ... ---
+    ... 123
+    ... ---
+    ... """)  # +stderr
+    Invalid front matter in <test>, expected mapping but got int
+    {'__src__': '<test>'}
 
-The internal function `_try_parse_simplified_yaml` implements support
-for parsing simplified YAML.
+Groktest falls back on YAML, which parses invalid JSON and TOML as
+strings. In such cases, the error message is modified to call attention
+to a possible formatting/syntax error.
 
-    >>> def parse_simplified_yaml(s):
-    ...     pprint(groktest._try_parse_simplified_yaml(
-    ...         s, "<test>", raise_error=True))
+    >>> front_matter("""
+    ... ---
+    ... foo = bar
+    ... ---
+    ... """)  # +stderr
+    Unable to parse front matter in <test> - verify valid JSON, TOML, or YAML
+    {'__src__': '<test>'}
 
-    >>> parse_simplified_yaml("""
+    >>> front_matter("""
+    ... ---
+    ... { "foo": "bar }
+    ... ---
+    ... """)  # +stderr
+    Unable to parse front matter in <test> - verify valid JSON, TOML, or YAML
+    {'__src__': '<test>'}
+
+## YAML
+
+Groktest supports YAML front matter using `groktest._vendor_strictyaml`.
+
+The internal function `_parse_yaml` implements support for parsing
+simplified YAML.
+
+    >>> def parse_yaml(s):
+    ...     return groktest._parse_yaml(s, "<test>")
+
+    >>> parse_yaml("""
     ... i: 123
     ... f: 1.123
     ... s1: hello
@@ -166,7 +189,7 @@ for parsing simplified YAML.
     ... b2: yes
     ... b3: false
     ... b4: no
-    ... """)
+    ... """)  # +pprint
     {'b1': True,
      'b2': True,
      'b3': False,
@@ -177,55 +200,27 @@ for parsing simplified YAML.
      's2': 'a quoted value',
      's3': 'another quoted value'}
 
-Any other types are treated as strings.
-
-    >>> parse_simplified_yaml("""
+    >>> parse_yaml("""
     ... s1: [1, 2, 3]
     ... s2: {foo: 123, bar: 456}
-    ... """)
-    {'s1': '[1, 2, 3]', 's2': '{foo: 123, bar: 456}'}
+    ... """)  # +pprint
+    {'s1': [1, 2, 3], 's2': {'bar': 456, 'foo': 123}}
 
-In the simple YAML support, comments can only appear on separate lines.
-
-    >>> parse_simplified_yaml("""
+    >>> parse_yaml("""
     ... # This is a comment
     ... foo: 123
     ... """)
     {'foo': 123}
 
-    >>> parse_simplified_yaml("""
+    >>> parse_yaml("""
     ... foo: 123  # this is not a comment
     ... """)
-    {'foo': '123  # this is not a comment'}
+    {'foo': 123}
 
-    >>> parse_simplified_yaml("""
+    >>> parse_yaml("""
     ... test-options: +match -case
     ... """)
     {'test-options': '+match -case'}
-
-The underlying implementation uses `configparse` as an opportunistic
-method to parse a single top-level map of names to values. The
-implementation parses any valid Python INI, despite it not being valid
-YAML.
-
-INI sections are ignored in the result.
-
-    >>> parse_simplified_yaml("""
-    ... [my-section]
-    ... foo: 123
-    ... """)
-    {}
-
-Top level assignments may be made using an equals sign (`=`), which is
-also not valid YAML.
-
-    >>> parse_simplified_yaml("""
-    ... foo = 123
-    ...
-    ... [my-section]
-    ... foo = 456
-    ... """)
-    {'foo': 123}
 
 ## JSON
 
@@ -234,7 +229,7 @@ The internal `_try_parse_json` implements support for parsing JSON
 front matter.
 
     >>> def parse_json(s):
-    ...     pprint(groktest._try_parse_json(s, "<test>", raise_error=True))
+    ...     return groktest._parse_json(s, "<test>")
 
     >>> parse_json("1")
     1
@@ -244,7 +239,7 @@ front matter.
 
     >>> parse_json("not valid JSON")
     Traceback (most recent call last):
-    json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+    ValueError: Expecting value: line 1 column 1 (char 0)
 
     >>> parse_json("""
     ... {
@@ -256,17 +251,23 @@ front matter.
     ...     }
     ...   }
     ... }
-    ... """)
-    {'test-config': {'parse-types': {'id': '[a-f0-9]{8}'},
-                     'ps1': '>',
-                     'ps2': '+'}}
+    ... """) # +json
+    {
+      "test-config": {
+        "parse-types": {
+          "id": "[a-f0-9]{8}"
+        },
+        "ps1": ">",
+        "ps2": "+"
+      }
+    }
 
 ## TOML
 
-TOML based config supported using `groktest._vendor_tomli`.
+TOML based config is supported using `groktest._vendor_tomli`.
 
     >>> def parse_toml(s):
-    ...     pprint(groktest._try_parse_toml(s, "<test>", raise_error=True))
+    ...     return groktest._parse_toml(s, "<test>")
 
     >>> parse_toml("""
     ... test-type = "doctest"
@@ -280,7 +281,7 @@ TOML based config supported using `groktest._vendor_tomli`.
     ...
     ... [test-config.parse-types]
     ... id = "[a-f0-9]{8}"
-    ... """)
+    ... """)  # +pprint
     {'test-config': {'parse-types': {'id': '[a-f0-9]{8}'},
                      'ps1': '>',
                      'ps2': '+'}}
@@ -296,7 +297,7 @@ The mapping of simplified front matter to config is described by
 
     >>> from groktest import FRONT_MATTER_TO_CONFIG
 
-    >>> pprint(FRONT_MATTER_TO_CONFIG)
+    >>> FRONT_MATTER_TO_CONFIG  # +pprint
     {'nushell-init': ['nushell', 'init'],
      'parse-functions': ['parse', 'functions'],
      'parse-types': ['parse', 'types'],
