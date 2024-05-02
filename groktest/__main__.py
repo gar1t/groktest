@@ -171,7 +171,7 @@ def _handle_test_error(filename: str, e: Exception):
     elif isinstance(e, TestTypeNotSupported):
         log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
     else:
-        log.error("Unhandled error for %s: %s", filename, e)
+        log.error("Unhandled error for %s: %r", filename, e)
 
 
 def _print_result_summary(summary: ResultSummary):
@@ -328,7 +328,7 @@ def _init_config(args: Any):
 
 def _apply_args_config(args: Any, config: ProjectConfig):
     if args.failfast:
-        config["failfast"] = True
+        config.setdefault("options", []).append("+failfast")
 
 
 def _apply_project_config(src: dict[str, Any], dest: dict[str, Any]):
@@ -354,8 +354,8 @@ def _project_candidate(path_arg: str):
     return None
 
 
-def _test_filenames(config: Optional[ProjectConfig], args: Any):
-    if not config:
+def _test_filenames(config: ProjectConfig, args: Any):
+    if "__src__" not in config:
         return args.paths
     include = _coerce_list(config.get("include"))
     if not include:
