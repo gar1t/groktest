@@ -48,6 +48,7 @@ Run the tests.
     >>> run_main([test_pass])  # +wildcard +paths
     Testing .../pass.md
     ----------------------------------------------------------------------
+    1 test run
     All tests passed 🎉
 
     >>> run_main([test_fail])

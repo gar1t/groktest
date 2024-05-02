@@ -67,15 +67,19 @@ def main(args: Any = None):
 def _print_results(failed: int, tested: int, skipped: int, failed_files: list[str]):
     hr = "-" * 70
     print(hr)
-    if skipped:
-        print(f"{skipped} {'test' if skipped == 1 else 'tests'} skipped")
     if tested == 0:
         assert not failed_files
         print("Nothing tested 😴")
         raise SystemExit(EXIT_NO_TESTS)
-    elif failed == 0:
+    print(f"{tested} {'test' if tested == 1 else 'tests'} run")
+    if skipped:
+        print(f"{skipped} {'test' if skipped == 1 else 'tests'} skipped")
+    if failed == 0:
         assert not failed_files
-        print("All tests passed 🎉")
+        if skipped == 0:
+            print("All tests passed 🎉")
+        else:
+            print("0 tests failed 🎉")
     else:
         assert failed_files
         print(
