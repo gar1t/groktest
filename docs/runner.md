@@ -27,8 +27,8 @@ Runner state consists of the following:
 
 - Results
 
-    >>> pprint(state.results)
-    <TestResults failed=0 tested=0 skipped=0>
+    >>> pprint(state.summary)
+    <TestSummary failed=0 tested=0 skipped=0>
 
 The runtime available from the state is available.
 

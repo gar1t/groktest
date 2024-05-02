@@ -12,6 +12,7 @@ Create a function to run Groktest using the main function.
     ...     try:
     ...         out = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
     ...     except subprocess.CalledProcessError as e:
+    ...         print(e.output)
     ...         print(f"<exit {e.returncode}>")
     ...     else:
     ...         print(out, end="")
@@ -51,10 +52,28 @@ Run the tests.
     1 test run
     All tests passed 🎉
 
-    >>> run_main([test_fail])
+    >>> run_main([test_fail])  # +wildcard +paths
+    Testing .../fail.md
+    **********************************************************************
+    File ".../fail.md", line 2
+    Failed example:
+        1
+    Expected:
+        2
+    Got:
+        1
+    ----------------------------------------------------------------------
+    1 test run
+    1 test failed in 1 file 💥 (see above for details)
+     - .../fail.md
+    ⤶
     <exit 1>
 
-    >>> run_main([test_empty])
+    >>> run_main([test_empty])  # +wildcard +paths
+    Testing .../empty.md
+    ----------------------------------------------------------------------
+    Nothing tested 😴
+    ⤶
     <exit 2>
 
 ## Version

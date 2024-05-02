@@ -6,16 +6,20 @@ from .__init__ import ProjectConfig
 
 import argparse
 import glob
+import io
 import json
 import logging
 import os
+import queue
 import sys
 import tempfile
+import threading
 
 from .__init__ import __version__
 from .__init__ import test_file
 from .__init__ import load_project_config
 from .__init__ import ProjectDecodeError
+from .__init__ import TestSummary
 from .__init__ import TestTypeNotSupported
 
 # Defer init to `_init_logging()`
@@ -23,6 +27,74 @@ log: logging.Logger = cast(logging.Logger, None)
 
 EXIT_FAILED = 1
 EXIT_NO_TESTS = 2
+
+
+class TestQueue(queue.Queue):
+    def __init__(self, filenames: list[str]):
+        super().__init__()
+        self.tests = [ConcurrentTest(filename) for filename in filenames]
+        for test in self.tests:
+            self.put(test)
+
+    def __iter__(self):
+        return iter(self.tests)
+
+
+class TestRunner(threading.Thread):
+    def __init__(self, queue: TestQueue, config: ProjectConfig):
+        super().__init__()
+        self.queue = queue
+        self.config = config
+        self.start()
+
+    def run(self):
+        while True:
+            try:
+                test = self.queue.get(block=False)
+            except queue.Empty:
+                break
+            else:
+                try:
+                    result = test_file(test.filename, self.config, test.print_result)
+                except Exception as e:
+                    test.set_result(e)
+                else:
+                    test.set_result(result)
+
+
+class ConcurrentTest:
+    def __init__(self, filename: str):
+        self.filename = filename
+        self._result: Optional[Union[TestSummary, Exception]] = None
+        self._has_result = threading.Event()
+        self._output = io.StringIO()
+
+    def __str__(self):
+        return os.path.relpath(self.filename)
+
+    def print_result(self, s: str):
+        self._output.write(s)
+        self._output.write("\n")
+
+    def set_result(self, result: TestSummary | Exception):
+        self._result = result
+        self._has_result.set()
+
+    def wait_for_result(self):
+        self._has_result.wait()
+        assert self._result
+        return self._result
+
+    def get_output(self):
+        out = self._output.getvalue()
+        return out[:-1] if out else out
+
+
+class ResultSummary:
+    failed: int = 0
+    tested: int = 0
+    skipped: int = 0
+    failed_files: list[str] = []
 
 
 def main(args: Any = None):
@@ -36,50 +108,90 @@ def main(args: Any = None):
     _apply_last(args)
     config = _init_config(args)
 
-    failed = tested = skipped = 0
-    failed_files = []
+    queue = TestQueue(sorted(_test_filenames(config, args)))
+    if args.preview:
+        _preview_and_exit(queue)
 
-    for filename in sorted(_test_filenames(config, args)):
-        relname = os.path.relpath(filename)
-        if args.preview:
-            print(f"Testing {relname} (preview)")
-            continue
-        print(f"Testing {relname}")
-        try:
-            result = test_file(filename, config)
-        except FileNotFoundError:
-            log.warning("%s does not exist, skipping", filename)
-        except IsADirectoryError:
-            log.warning("%s is a directory, skipping", filename)
-        except TestTypeNotSupported as e:
-            log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
-        else:
-            if result.failed:
-                failed_files.append(filename)
-            failed += result.failed
-            tested += result.tested
-            skipped += result.skipped
-
-    assert failed <= tested, (failed, tested)
-    _print_results(failed, tested, skipped, failed_files)
+    runners = _init_runners(queue, config, args)
+    summary = ResultSummary()
+    for test in queue:
+        print(f"Testing {test}")
+        result = test.wait_for_result()
+        output = test.get_output()
+        if output:
+            print(output)
+        _handle_test_result(test.filename, result, summary)
+    _join_runners(runners)
+    _print_result_summary(summary)
 
 
-def _print_results(failed: int, tested: int, skipped: int, failed_files: list[str]):
-    hr = "-" * 70
-    print(hr)
+def _preview_and_exit(queue: TestQueue):
+    for test in queue:
+        print(f"Testing {test} (preview)")
+    raise SystemExit(0)
+
+
+def _init_runners(queue: TestQueue, config: ProjectConfig, args: Any):
+    return [
+        TestRunner(queue, config)
+        for _ in range(args.concurrency or _default_concurrency())
+    ]
+
+
+def _default_concurrency():
+    return 8
+
+
+def _join_runners(runners: list[TestRunner]):
+    for runner in runners:
+        runner.join()
+
+
+def _handle_test_result(
+    filename: str,
+    result: TestSummary | Exception,
+    summary: ResultSummary,
+):
+    if isinstance(result, Exception):
+        _handle_test_error(filename, result)
+    else:
+        assert isinstance(result, TestSummary)
+        if result.failed:
+            summary.failed_files.append(filename)
+        summary.failed += result.failed
+        summary.tested += result.tested
+        summary.skipped += result.skipped
+
+
+def _handle_test_error(filename: str, e: Exception):
+    if isinstance(e, FileNotFoundError):
+        log.warning("%s does not exist, skipping", filename)
+    elif isinstance(e, IsADirectoryError):
+        log.warning("%s is a directory, skipping", filename)
+    elif isinstance(e, TestTypeNotSupported):
+        log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
+    else:
+        log.error("Unhandled error for %s: %s", filename, e)
+
+
+def _print_result_summary(summary: ResultSummary):
+    tested = summary.tested
+    skipped = summary.skipped
+    failed = summary.failed
+    failed_files = summary.failed_files
+
+    print("-" * 70)
     if tested == 0:
         assert not failed_files
         print("Nothing tested 😴")
         raise SystemExit(EXIT_NO_TESTS)
+
     print(f"{tested} {'test' if tested == 1 else 'tests'} run")
     if skipped:
         print(f"{skipped} {'test' if skipped == 1 else 'tests'} skipped")
     if failed == 0:
         assert not failed_files
-        if skipped == 0:
-            print("All tests passed 🎉")
-        else:
-            print("0 tests failed 🎉")
+        print("All tests passed 🎉")
     else:
         assert failed_files
         print(
@@ -143,6 +255,13 @@ def _init_parser():
         "--failfast",
         action="store_true",
         help="Stop on the first error for a file.",
+    )
+    p.add_argument(
+        "-C",
+        "--concurrency",
+        metavar="N",
+        type=int,
+        help="Max number of concurrent tests.",
     )
     p.add_argument(
         "--debug",
