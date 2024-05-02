@@ -62,7 +62,7 @@ class PythonRuntime(Runtime):
     def start(self, config: Optional[TestConfig] = None):
         self._p = _open_proc()
 
-    def init_for_tests(self, config: TestConfig | None = None) -> None:
+    def init_for_tests(self, config: Optional[TestConfig] = None) -> None:
         if config:
             _init_for_tests(config, _check_proc(self._p))
 

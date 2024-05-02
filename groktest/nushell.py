@@ -76,7 +76,7 @@ class NuShellRuntime(Runtime):
     def start(self, config: Optional[TestConfig] = None):
         self._state = _init_state()
 
-    def init_for_tests(self, config: TestConfig | None = None) -> None:
+    def init_for_tests(self, config: Optional[TestConfig] = None) -> None:
         assert self._state is not None
         self._state.vars.clear()
         self._state.cwd = None
