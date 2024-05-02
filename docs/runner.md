@@ -1,12 +1,3 @@
----
-# Use TOML as alternative config
-
-test-type = "doctest"
-
-[tool.groktest]
-options = "+ELLIPSIS"
----
-
 # Test runners
 
 ## Runner state
@@ -20,21 +11,24 @@ Runner state an internal construct Groktest uses when running tests.
 Runner state consists of the following:
 
 - Test spec
-- Runtime
-- Tests
-- Results
 
-    >>> state.spec
+    >>> state.spec  # +wildcard
     <groktest.TestSpec object at ...>
 
-    >>> state.runtime
+- Runtime
+
+    >>> state.runtime  # +wildcard
     <groktest.python.PythonRuntime object at ...>
 
-    >>> state.tests
+- Tests
+
+    >>> state.tests  # +wildcard
     [<groktest.Test object at ...>, ...]
 
+- Results
+
     >>> pprint(state.results)
-    {'failed': 0, 'skipped': 0, 'tested': 0}
+    <TestResults failed=0 tested=0 skipped=0>
 
 The runtime available from the state is available.
 
@@ -49,6 +43,7 @@ Runtime should be stopped when no longer needed.
 
 A file must exist.
 
-    >>> init_runner_state("does_not_exist")
+    >>> init_runner_state("does_not_exist")  # +wildcard
     Traceback (most recent call last):
+    ...
     FileNotFoundError: [Errno 2] No such file or directory: '...does_not_exist'

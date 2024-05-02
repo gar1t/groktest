@@ -202,6 +202,7 @@ def _format_nu_test_expr_command(test: Test, state: State):
     $env.PWD
     """
 
+
 def _init_commands(state: State):
     if not state.config:
         return ""
@@ -209,6 +210,7 @@ def _init_commands(state: State):
         return state.config["nushell"]["init"]
     except KeyError:
         return ""
+
 
 def _source_vars_command(state: State):
     return f"source {state.vars_nu_filename}"
@@ -218,6 +220,7 @@ def _cd_command(state: State):
     if not state.cwd:
         return ""
     return f"cd `{state.cwd}`"
+
 
 def _log_command(cmd: List[str], cwd: str, env: Dict[str, str]):
     if log.getEffectiveLevel() > logging.DEBUG:

@@ -1,7 +1,3 @@
----
-test-type = "doctest"
----
-
 # Matching test results
 
 ## String matching
@@ -12,7 +8,7 @@ String matching is used by default. It's implemented by
     >>> def str_match(expected, test_output, options=None):
     ...     from groktest import str_match as str_match0
     ...     m = str_match0(expected, test_output, options)
-    ...     pprint(m.match)
+    ...     return m.match
 
 By default, string matching simply compares two strings.
 
@@ -111,7 +107,7 @@ implemented by `groktest.parse_match`.
     ...     from groktest import parse_match as parse_match0
     ...     config = {"parse": {"types": types}} if types else {}
     ...     m = parse_match0(expected, test_output, options, config)
-    ...     pprint(m.vars if m.match else None)
+    ...     print(m.vars if m.match else None)
 
 Match simple output.
 
@@ -202,9 +198,9 @@ Patterns match across multiple lines.
     ... File "<stdin>", line 2, in boom
     ... ZeroDivisionError: division by zero
     ... """
-    ... )
-    {'stack': 'File "<stdin>", line 1, in <module>\n'
-              'File "<stdin>", line 2, in boom'}
+    ... )  # -space
+    {'stack': 'File "<stdin>", line 1,
+               in <module>\nFile "<stdin>", line 2, in boom'}
 
 Non-patterns are sensitive to line-endings.
 

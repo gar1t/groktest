@@ -1,9 +1,3 @@
----
-[tool.groktest]
-type = "doctest"
-options = "+ELLIPSIS"
----
-
 # Python support
 
 Python support is provided by the Python runtime defined in
@@ -49,13 +43,13 @@ for parsing.
 Various tests:
 
     >>> run_test(">>> None")
-    <BLANKLINE>
+    ⤶
 
     >>> run_test("""
     ... >>> 1 + 1
     ... """)
     2
-    <BLANKLINE>
+    ⤶
 
     >>> run_test("""
     ... >>> print('''
@@ -65,13 +59,13 @@ Various tests:
     ... ... Line 2
     ... ... ''')
     ... """)
-    <BLANKLINE>
+    ⤶
     Line 1
     Line 2
-    <BLANKLINE>
+    ⤶
     Line 2
-    <BLANKLINE>
-    <BLANKLINE>
+    ⤶
+    ⤶
 
 The Python runtime provides `short_error` in the case of an exception.
 This can be used to match as an alternative to the full output.
@@ -80,11 +74,11 @@ This can be used to match as an alternative to the full output.
     Traceback (most recent call last):
       File "<test>", line 1, in <module>
     ZeroDivisionError: division by zero
-    <BLANKLINE>
+    ⤶
     ----short error----
     Traceback (most recent call last):
     ZeroDivisionError: division by zero
-    <BLANKLINE>
+    ⤶
 
 Options may include `pprint` to pretty print results.
 
@@ -98,7 +92,7 @@ Options may include `pprint` to pretty print results.
     {'xxxxxxxxxxxxxxxxxx': 3,
      'yyyyyyyyyyyyyyyyyy': 2,
      'zzzzzzzzzzzzzzzzzz': 1}
-    <BLANKLINE>
+    ⤶
 
 Without `pprint`:
 
@@ -110,14 +104,14 @@ Without `pprint`:
     ... ... }
     ... """)
     {'zzzzzzzzzzzzzzzzzz': 1, 'yyyyyyyyyyyyyyyyyy': 2, 'xxxxxxxxxxxxxxxxxx': 3}
-    <BLANKLINE>
+    ⤶
 
 Note that `msg`, which we defined for the runtime using
 `init_for_tests()` above, is available in globals.
 
     >>> run_test(">>> print(msg)")
     Hi!
-    <BLANKLINE>
+    ⤶
 
 ### Special handling for assertions
 
@@ -130,11 +124,11 @@ assertion error if one has not already been provided.
     Traceback (most recent call last):
       File "<test>", line 1, in <module>
     AssertionError: {'x': 1}
-    <BLANKLINE>
+    ⤶
     ----short error----
     Traceback (most recent call last):
     AssertionError: {'x': 1}
-    <BLANKLINE>
+    ⤶
 
 If the expression provides an argument for the assertion error, it's
 used as specified.
@@ -143,18 +137,18 @@ used as specified.
     Traceback (most recent call last):
       File "<test>", line 1, in <module>
     AssertionError: x = 1
-    <BLANKLINE>
+    ⤶
     ----short error----
     Traceback (most recent call last):
     AssertionError: x = 1
-    <BLANKLINE>
+    ⤶
 
 ### Special handling for comments
 
 The Python runtime treats comments as implicit `None` values.
 
     >>> run_test(">>> # This is a comment")
-    <BLANKLINE>
+    ⤶
 
 ## Stopping a runtime
 

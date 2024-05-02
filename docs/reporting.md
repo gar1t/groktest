@@ -1,7 +1,3 @@
----
-test-type: doctest
----
-
 # Reporting
 
 Groktest currently reports results during a test run by printing
@@ -146,7 +142,7 @@ blank line matching in this case.
         print('')
     Expected nothing
     Got:
-    <BLANKLINE>
+    ⤶
 
 Disabling blankline is useful in the rare case where `⤶` is used in the
 expected output.

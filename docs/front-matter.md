@@ -306,7 +306,7 @@ The mapping of simplified front matter to config is described by
 
 Front matter is converted to config using `front_matter_to_config`.
 
-    >>> from groktest import front_matter_to_config  # -skiprest
+    >>> from groktest import front_matter_to_config
 
 In the simple case, fully defined configuration is passed through.
 

@@ -45,7 +45,5 @@ exclude = [
 ]
 
 python.init = """
-from groktest import load_project_config
-from os import path
-import re
+from groktest._test_util import *
 """

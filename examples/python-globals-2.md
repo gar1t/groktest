@@ -1,12 +1,11 @@
 ---
 [tool.groktest]
-
 python.init = """
 def greet():
     print("Hi hi hi")
 """
 
-# """ hack to fix syntax highlighting in VS Code
+# """ <- fixes syntax highlighting in VS Code
 ---
 
 This example shows a deeper configuration using TOML. In this case the

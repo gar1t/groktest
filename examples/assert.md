@@ -1,8 +1,3 @@
----
-[tool.groktest]
-options = "+wildcard"
----
-
 # Using `assert` in tests
 
 Assertions are useful for testing values that aren't suitable for

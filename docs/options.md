@@ -1,7 +1,3 @@
----
-test-type: doctest
----
-
 # Test options
 
 Test options are flags used to control test behavior. An option may be

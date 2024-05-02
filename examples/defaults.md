@@ -1,7 +1,3 @@
----
-# test-type is 'default' by default
----
-
 # Default Groktest tests
 
 The default Groktest configuration is based on `doctest`. It uses the

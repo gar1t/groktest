@@ -9,10 +9,11 @@ python-init: "msg = 'Hello!'"
     ['__builtins__',
      '__file__',
      '__name__',
-     'load_project_config',
      'msg',
-     'path',
-     're']
+     'os',
+     'pprint',
+     're',
+     'run']
 
 Python tests have access to the standard set of Python builtins.
 
@@ -39,15 +40,14 @@ above.
 
 Show project config using `load_project_config`:
 
-    >>> project_config = path.normpath(__file__ + "/../../pyproject.toml")
+    >>> project_config = os.path.normpath(__file__ + "/../../pyproject.toml")
+    >>> from groktest import load_project_config
 
-    >>> load_project_config(project_config)  # +pprint +paths
+    >>> load_project_config(project_config)  # +pprint +paths +wildcard
     {'__src__': '.../pyproject.toml',
      'exclude': ['docs/yaml.md', 'examples/unknown-format.md'],
      'include': ['README.md', 'docs/*.md', 'examples/*.md'],
-     'python': {'init': 'from groktest import load_project_config\n'
-                        'from os import path\n'
-                        'import re\n'}}
+     'python': {'init': 'from groktest._test_util import *\n'}}
 
 `re` is available via project config:
 
