@@ -1,7 +1,7 @@
 [project]
 
 name = "groktest"
-version = "0.1.5"  # Sync with groktest.__init__
+version = "0.2.0"  # Sync with groktest.__init__
 authors = [
   { name="Garrett Smith", email="garrett@placeon.earth" },
 ]
