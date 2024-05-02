@@ -31,7 +31,7 @@ Differences to `doctest`:
 
 Python's `doctest` paved the way for computational documents like
 Jupyter Notebooks, R Markdown, and Quarto. It was one of the first of
-its kind. We owe a debt of grattutude to Tim Peters for the original
+its kind. We owe a debt of gratitude to Tim Peters for the original
 work and to Jim Fulton for advancing its use.
 
 The rationale for `doctest` is that examples provide a high-signal,
@@ -42,12 +42,12 @@ low-noise representation of developer intent.
 - Examples are often easier to understand (grok) than a series of
   assertions
 - Example output can replace a large number of explicit assertions,
-  providing more test coverage with fewer expresions
+  providing more test coverage with fewer expressions
 
 `doctest` however presents some key problems.
 
 - Result comparison can use an ellipsis `...` to match any output; while
-  the match is geedy, it can match invalid output and mast errors
+  the match is greedy, it can match invalid output and mast errors
 - The framework is Python specific and difficult to apply to cases
   outside Python
 - Pattern matching is limited to a single 'match all' pattern
