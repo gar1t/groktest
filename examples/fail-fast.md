@@ -8,4 +8,4 @@ This document defines two failing tests.
     >>> 2
     3
 
-When run with `--failfast` only the first test is executed.
+When run with `--fail-fast` only the first test is executed.

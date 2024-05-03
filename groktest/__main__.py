@@ -19,6 +19,7 @@ from .__init__ import __version__
 from .__init__ import test_file
 from .__init__ import load_project_config
 from .__init__ import ProjectDecodeError
+from .__init__ import Test
 from .__init__ import TestSummary
 from .__init__ import TestTypeNotSupported
 
@@ -67,8 +68,10 @@ class TestRunner(threading.Thread):
                 break
             else:
                 try:
-                    result = test_file(test.filename, self.config, test.print_result)
+                    result = test_file(test.filename, self.config, test.print_output)
                 except Exception as e:
+                    if log.getEffectiveLevel() <= logging.DEBUG:
+                        log.exception(test.filename)
                     test.set_result(e)
                 else:
                     test.set_result(result)
@@ -84,7 +87,7 @@ class ConcurrentTest:
     def __str__(self):
         return os.path.relpath(self.filename)
 
-    def print_result(self, s: str):
+    def print_output(self, s: str):
         self._output.write(s)
         self._output.write("\n")
 
@@ -102,11 +105,17 @@ class ConcurrentTest:
         return out[:-1] if out else out
 
 
+class SummaryTest:
+    def __init__(self, filename: str, line: int):
+        self.filename = filename
+        self.line = line
+
+
 class ResultSummary:
-    failed: int = 0
-    tested: int = 0
-    skipped: int = 0
-    failed_files: list[str] = []
+    def __init__(self):
+        self.failed: list[SummaryTest] = []
+        self.tested: list[SummaryTest] = []
+        self.skipped: list[SummaryTest] = []
 
 
 def main(args: Any = None):
@@ -138,7 +147,7 @@ def main(args: Any = None):
         _handle_test_result(test.filename, result, summary)
     _join_runners(runners)
     with stdout_lock:
-        _print_result_summary(summary)
+        _print_summary_and_exit(summary, config)
 
 
 def _preview_and_exit(queue: TestQueue):
@@ -172,11 +181,13 @@ def _handle_test_result(
         _handle_test_error(filename, result)
     else:
         assert isinstance(result, TestSummary)
-        if result.failed:
-            summary.failed_files.append(filename)
-        summary.failed += result.failed
-        summary.tested += result.tested
-        summary.skipped += result.skipped
+        summary.failed.extend(_to_summary_tests(result.failed))
+        summary.tested.extend(_to_summary_tests(result.tested))
+        summary.skipped.extend(_to_summary_tests(result.skipped))
+
+
+def _to_summary_tests(tests: list[Test]):
+    return [SummaryTest(t.filename, t.line) for t in tests]
 
 
 def _handle_test_error(filename: str, e: Exception):
@@ -190,34 +201,43 @@ def _handle_test_error(filename: str, e: Exception):
         log.error("Unhandled error for %s: %r", filename, e)
 
 
-def _print_result_summary(summary: ResultSummary):
-    tested = summary.tested
-    skipped = summary.skipped
-    failed = summary.failed
-    failed_files = summary.failed_files
-
+def _print_summary_and_exit(summary: ResultSummary, config: ProjectConfig):
     print("-" * 70)
-    if tested == 0:
-        assert not failed_files
+    if not summary.tested:
         print("Nothing tested 😴")
         raise SystemExit(EXIT_NO_TESTS)
 
-    print(f"{tested} {'test' if tested == 1 else 'tests'} run")
-    if skipped:
-        print(f"{skipped} {'test' if skipped == 1 else 'tests'} skipped")
-    if failed == 0:
-        assert not failed_files
-        print("All tests passed 🎉")
-    else:
-        assert failed_files
-        print(
-            f"{failed} {'test' if failed == 1 else 'tests'} failed "
-            f"in {len(failed_files)} {'file' if len(failed_files) == 1 else 'files'} "
-            "💥 (see above for details)"
-        )
-        for filename in failed_files:
-            print(f" - {filename}")
+    _print_tested_count(summary.tested)
+    if summary.skipped:
+        _print_skipped(summary.skipped, config)
+    if summary.failed:
+        _print_failed(summary.failed, config)
         raise SystemExit(EXIT_FAILED)
+    print("All tests passed 🎉")
+    raise SystemExit(0)
+
+
+def _print_tested_count(tested: list[SummaryTest]):
+    print(f"{len(tested)} {'test' if len(tested) == 1 else 'tests'} run")
+
+
+def _print_skipped(skipped: list[SummaryTest], config: ProjectConfig):
+    show_skipped = config.get("show-skipped")
+    print(
+        f"{len(skipped)} {'test' if len(skipped) == 1 else 'tests'} skipped"
+        f"{'' if show_skipped else ' (use --show-skipped to view)'}")
+    if config.get("show-skipped"):
+        for test in skipped:
+            print(f" - {os.path.relpath(test.filename)}:{test.line}")
+
+
+def _print_failed(failed: list[SummaryTest], config: ProjectConfig):
+    print(
+        f"{len(failed)} {'test' if len(failed) == 1 else 'tests'} failed "
+        "💥 (see above for details)"
+    )
+    for test in failed:
+        print(f" - {os.path.relpath(test.filename)}:{test.line}")
 
 
 def _print_version_and_exit():
@@ -268,7 +288,7 @@ def _init_parser():
     )
     p.add_argument(
         "-F",
-        "--failfast",
+        "--fail-fast",
         action="store_true",
         help="Stop on the first error for a file.",
     )
@@ -278,6 +298,11 @@ def _init_parser():
         metavar="N",
         type=int,
         help="Max number of concurrent tests.",
+    )
+    p.add_argument(
+        "--show-skipped",
+        action="store_true",
+        help="Show skipped tests in output.",
     )
     p.add_argument(
         "--debug",
@@ -343,8 +368,10 @@ def _init_config(args: Any):
 
 
 def _apply_args_config(args: Any, config: ProjectConfig):
-    if args.failfast:
-        config.setdefault("options", []).append("+failfast")
+    if args.fail_fast:
+        config["fail-fast"] = True
+    if args.show_skipped:
+        config["show-skipped"] = True
 
 
 def _apply_project_config(src: dict[str, Any], dest: dict[str, Any]):

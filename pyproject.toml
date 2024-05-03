@@ -42,7 +42,7 @@ include = [
 exclude = [
   "docs/yaml.md",
   "examples/unknown-format.md",
-  "examples/failfast.md",
+  "examples/fail-fast.md",
 ]
 
 python.init = """

@@ -64,8 +64,8 @@ Run the tests.
         1
     ----------------------------------------------------------------------
     1 test run
-    1 test failed in 1 file 💥 (see above for details)
-     - .../fail.md
+    1 test failed 💥 (see above for details)
+     - .../fail.md:2
     ⤶
     <exit 1>
 

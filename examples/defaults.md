@@ -21,10 +21,9 @@ expression.
 
 If expected output matches the evaluated expression, the test passes,
 otherwise it fails. Groktest supports methods for comparing test results
-to expected output. By default, output must match exactly. See below for
-alternative matching schemes.
+to expected output. By default, output must match exactly.
 
-    >>> True  # +skip failing test
+    >>> True  # +fails
     true
 
 Test expressions may span multiple lines using PS2.

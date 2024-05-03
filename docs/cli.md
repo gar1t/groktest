@@ -3,7 +3,8 @@
 Run Groktest using the `groktest` command.
 
     >>> run("groktest --help")  # +diff
-    usage: groktest [--version] [-h] [--preview] [--last] [-F] [-C N] [--debug]
+    usage: groktest [--version] [-h] [--preview] [--last] [-F] [-C N]
+                    [--show-skipped] [--debug]
                     [[PROJECT [SUITE]] | [FILE...] ...]
     ⤶
     positional arguments:
@@ -15,9 +16,10 @@ Run Groktest using the `groktest` command.
       -h, --help            Show this help message and exit.
       --preview             Show tests without running them.
       --last                Re-run last tests.
-      -F, --failfast        Stop on the first error for a file.
+      -F, --fail-fast       Stop on the first error for a file.
       -C N, --concurrency N
                             Max number of concurrent tests.
+      --show-skipped        Show skipped tests in output.
       --debug               Show debug info.
     ⤶
     <0>

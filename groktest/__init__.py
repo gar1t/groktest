@@ -88,15 +88,16 @@ ParseTypeFunctions = Dict[str, ParseTypeFunction]
 
 
 class TestSummary:
-    failed: int = 0
-    tested: int = 0
-    skipped: int = 0
+    def __init__(self):
+        self.failed: list[Test] = []
+        self.tested: list[Test] = []
+        self.skipped: list[Test] = []
 
     def __repr__(self):
         return (
-            f"<TestSummary failed={self.failed}"
-            f" tested={self.tested}"
-            f" skipped={self.skipped}>"
+            f"<TestSummary failed={len(self.failed)}"
+            f" tested={len(self.tested)}"
+            f" skipped={len(self.skipped)}>"
         )
 
 
@@ -165,6 +166,11 @@ class Test:
         self.options = options
 
 
+class TestProxy(Test):
+    def __init__(self, filename: str):
+        super().__init__("", "", filename, 0, {})
+
+
 class TestResult:
     def __init__(self, code: int, output: str, short_error: Optional[str] = None):
         self.code = code
@@ -218,7 +224,7 @@ class RunnerState:
         spec: TestSpec,
         config: TestConfig,
         filename: str,
-        print_result: Printer,
+        print_output: Printer,
     ):
         self.tests = tests
         self.runtime = runtime
@@ -227,7 +233,7 @@ class RunnerState:
         self.config = config
         self.summary = TestSummary()
         self.skip_rest = False
-        self.print_result = print_result
+        self.print_output = print_output
 
 
 class DocTestRunnerState:
@@ -320,7 +326,7 @@ RUNTIME = {
 def init_runner_state(
     filename: str,
     project_config: Optional[ProjectConfig] = None,
-    print_result: Optional[Printer] = None,
+    print_output: Optional[Printer] = None,
 ):
     filename = os.path.abspath(filename)
     contents = _read_file(filename)
@@ -338,14 +344,14 @@ def init_runner_state(
         spec,
         test_config,
         filename,
-        print_result or print,
+        print_output or print,
     )
 
 
 def init_test_runner_state(
     spec: TestSpec,
     filename: Optional[str] = None,
-    print_result: Optional[Printer] = None,
+    print_output: Optional[Printer] = None,
 ):
     runtime = start_runtime(spec.runtime)
     return RunnerState(
@@ -354,7 +360,7 @@ def init_test_runner_state(
         spec,
         {},
         filename or "<test>",
-        print_result or print,
+        print_output or print,
     )
 
 
@@ -767,9 +773,9 @@ def start_runtime(name: str, config: Optional[TestConfig] = None):
 def test_file(
     filename: str,
     config: Optional[ProjectConfig] = None,
-    print_result: Optional[Printer] = None,
+    print_output: Optional[Printer] = None,
 ):
-    state = init_runner_state(filename, config, print_result)
+    state = init_runner_state(filename, config, print_output)
     if isinstance(state, DocTestRunnerState):
         _doctest_file(state)
         return state.results
@@ -878,18 +884,17 @@ def _try_match_output_candidates(
 
 def _handle_unexpected_test_pass(test: Test, options: TestOptions, state: RunnerState):
     _print_failed_test_sep(options, state)
-    state.print_result(f"File \"{test.filename}\", line {test.line}")
-    state.print_result("Failed example:")
+    state.print_output(f"File \"{test.filename}\", line {test.line}")
+    state.print_output("Failed example:")
     _print_test_expr(test.expr, state)
-    state.print_result("Expected test to fail but passed")
-    state.summary.failed += 1
-    state.summary.tested += 1
+    state.print_output("Expected test to fail but passed")
+    state.summary.failed.append(test)
+    state.summary.tested.append(test)
 
 
 def _handle_expected_test_failed(test: Test, options: TestOptions, state: RunnerState):
-    state.summary.tested += 1
-    if options.get("failfast"):
-        state.skip_rest = True
+    # This case is not a failure - it's expected
+    state.summary.tested.append(test)
 
 
 def _format_match_expected(test: Test, options: TestOptions, spec: TestSpec):
@@ -1263,7 +1268,7 @@ def _default_str_match(
 
 def _handle_test_passed(test: Test, match: TestMatch, state: RunnerState):
     state.runtime.handle_test_match(match)
-    state.summary.tested += 1
+    state.summary.tested.append(test)
 
 
 def _handle_test_failed(
@@ -1275,18 +1280,18 @@ def _handle_test_failed(
 ):
     _print_failed_test_sep(options, state)
     _print_failed_test(test, match, result, options, state)
-    state.summary.failed += 1
-    state.summary.tested += 1
-    if options.get("failfast"):
+    state.summary.failed.append(test)
+    state.summary.tested.append(test)
+    if state.config.get("fail-fast"):
         state.skip_rest = True
 
 
 def _print_failed_test_sep(options: TestOptions, state: RunnerState):
     sep = _option_value("sep", options, True)
     if sep is True:
-        state.print_result("*" * 70)
+        state.print_output("*" * 70)
     elif sep:
-        state.print_result(sep)
+        state.print_output(sep)
 
 
 def _print_failed_test(
@@ -1296,8 +1301,8 @@ def _print_failed_test(
     options: TestOptions,
     state: RunnerState,
 ):
-    state.print_result(f"File \"{test.filename}\", line {test.line}")
-    state.print_result("Failed example:")
+    state.print_output(f"File \"{test.filename}\", line {test.line}")
+    state.print_output("Failed example:")
     _print_test_expr(test.expr, state)
     if test.expected and options.get("diff"):
         _print_test_result_diff(test, result, options, state)
@@ -1305,14 +1310,14 @@ def _print_failed_test(
         _print_test_expected(test, state)
         _print_test_result_output(result, options, state)
     if match.reason:
-        state.print_result(f"Reason:")
+        state.print_output(f"Reason:")
         _print_mismatch_reason(match.reason, test, state)
 
 
 def _print_test_expr(expr: str, state: RunnerState):
     expr = expr.strip()
     for line in expr.split("\n"):
-        state.print_result("    " + line)
+        state.print_output("    " + line)
 
 
 def _print_test_result_diff(
@@ -1324,9 +1329,9 @@ def _print_test_result_diff(
     expected_lines, output_lines = _format_lines_for_diff(
         test, result, options, state.spec
     )
-    state.print_result("Differences between expected and actual:")
+    state.print_output("Differences between expected and actual:")
     for line in _diff_lines(expected_lines, output_lines):
-        state.print_result("   " + line)
+        state.print_output("   " + line)
 
 
 def _format_lines_for_diff(
@@ -1346,12 +1351,12 @@ def _diff_lines(a: List[str], b: List[str]):
 
 def _print_test_expected(test: Test, state: RunnerState):
     if test.expected:
-        state.print_result("Expected:")
+        state.print_output("Expected:")
         expected = _format_test_result_expected(test.expected)
         for line in expected.split("\n"):
-            state.print_result("    " + line)
+            state.print_output("    " + line)
     else:
-        state.print_result("Expected nothing")
+        state.print_output("Expected nothing")
 
 
 def _format_test_result_expected(expected: str):
@@ -1364,12 +1369,12 @@ def _print_test_result_output(
     state: RunnerState,
 ):
     if result.output:
-        state.print_result("Got:")
+        state.print_output("Got:")
         output = _format_test_result_output(result.output, options, state.spec)
         for line in output.split("\n"):
-            state.print_result("    " + line)
+            state.print_output("    " + line)
     else:
-        state.print_result("Got nothing")
+        state.print_output("Got nothing")
 
 
 def _format_test_result_output(output: str, options: TestOptions, spec: TestSpec):
@@ -1395,9 +1400,9 @@ def _print_mismatch_reason(reason: Any, test: Test, state: RunnerState):
         type = m.group(1)
         line = _find_parse_type_line(type, test.expected)
         line_msg = f" on line {line}" if line is not None else ""
-        state.print_result(f"    Unsupported parse type '{type}'{line_msg}")
+        state.print_output(f"    Unsupported parse type '{type}'{line_msg}")
     else:
-        state.print_result(f"    {msg}")
+        state.print_output(f"    {msg}")
 
 
 def _find_parse_type_line(type: str, s: str):
@@ -1413,8 +1418,12 @@ def _doctest_file(state: DocTestRunnerState):
         module_relative=False,
         optionflags=_doctest_options(state.config),
     )
-    state.results.failed += failed
-    state.results.tested += tested
+    test = TestProxy(state.filename)
+    if failed:
+        assert tested, state.filename
+        state.results.failed.append(test)
+    if tested:
+        state.results.tested.append(test)
 
 
 def _doctest_options(config: TestConfig):

@@ -47,7 +47,7 @@ Show project config using `load_project_config`:
     {'__src__': '.../pyproject.toml',
      'exclude': ['docs/yaml.md',
                  'examples/unknown-format.md',
-                 'examples/failfast.md'],
+                 'examples/fail-fast.md'],
      'include': ['README.md', 'docs/*.md', 'examples/*.md'],
      'python': {'init': 'from groktest._test_util import *\n'}}
 

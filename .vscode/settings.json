@@ -41,7 +41,6 @@
     "endpos",
     "Errno",
     "extraglobs",
-    "failfast",
     "finditer",
     "getenv",
     "Groktest",
