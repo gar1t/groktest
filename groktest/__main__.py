@@ -199,7 +199,11 @@ def _handle_test_error(filename: str, e: Exception):
     elif isinstance(e, TestTypeNotSupported):
         log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
     elif isinstance(e, Panic):
-        log.warning("Stopped testing %s because of an unhandled error", filename)
+        log.warning(
+            "Stopped testing %s because of an unhandled error - "
+            "refer to the log above for the source test",
+            filename,
+        )
     else:
         raise AssertionError((filename, e))
 
