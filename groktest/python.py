@@ -240,7 +240,11 @@ def _main_loop():
 
 
 def _readline():
-    return sys.stdin.readline().rstrip()
+    try:
+        return sys.stdin.readline().rstrip()
+    except OSError as e:
+        log.error("Reading from stdin: %s", e)
+        return ""
 
 
 def _decode_request(line: str):
