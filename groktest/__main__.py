@@ -199,7 +199,7 @@ def _handle_test_error(filename: str, e: Exception):
     elif isinstance(e, TestTypeNotSupported):
         log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
     elif isinstance(e, Panic):
-        log.warning(
+        log.error(
             "Stopped testing %s because of an unhandled error - "
             "refer to the log above for the source test",
             filename,
@@ -296,7 +296,7 @@ def _init_parser():
         help="Re-run last tests.",
     )
     p.add_argument(
-        "-F",
+        "-f",
         "--fail-fast",
         action="store_true",
         help="Stop on the first error for a file.",
