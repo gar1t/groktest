@@ -941,7 +941,7 @@ def _skip_test(options: TestOptions, state: RunnerState):
 
 
 def _handle_test_skipped(test: Test, state: RunnerState):
-    state.summary.skipped += 1
+    state.summary.skipped.append(test)
 
 
 def _handle_test_result(
