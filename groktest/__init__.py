@@ -351,7 +351,7 @@ def init_runner_state(
     fm = _parse_front_matter(contents, filename)
     spec = _spec_for_front_matter(fm, filename)
     test_config = _test_config(fm, project_config, filename)
-    log.debug("test config: %s", test_config)
+    log.debug("Test config: %s", test_config)
     if spec is DOCTEST_MARKER:
         return DocTestRunnerState(filename, test_config)
     runtime = start_runtime(spec.runtime, test_config)
@@ -403,6 +403,7 @@ def _parse_front_matter(s: str, filename: str):
 def _parsed_front_matter(s: str, filename: str):
     m = _FRONT_MATTER_P.match(s)
     if not m:
+        log.debug("No front matter for %s", filename)
         return cast(FrontMatter, {})
     s = m.group(1)
     try:
@@ -446,7 +447,7 @@ def _parse_json(s: str, filename: str):
     try:
         return json.loads(s)
     except Exception as e:
-        log.debug("ERROR parsing JSON front matter for %s: %s", filename, e)
+        log.debug("Could not parse JSON front matter for %s: %s", filename, e)
         raise ValueError(e) from None
 
 
@@ -454,7 +455,7 @@ def _parse_toml(s: str, filename: str):
     try:
         return toml.loads(s)
     except toml.TOMLDecodeError as e:
-        log.debug("ERROR parsing TOML front matter for %s: %s", filename, e)
+        log.debug("Could not parse TOML front matter for %s: %s", filename, e)
         raise ValueError(e) from None
 
 
@@ -462,7 +463,7 @@ def _parse_yaml(s: str, filename: str):
     try:
         return yaml.safe_load(s)
     except Exception as e:
-        log.debug("ERROR parsing YAML front matter for %s: %s", filename, e)
+        log.debug("Could not parse YAML front matter for %s: %s", filename, e)
         raise ValueError(e) from None
 
 
@@ -633,7 +634,9 @@ def _test_config(
     project_config: Optional[ProjectConfig],
     filename: str,
 ):
-    project_config = project_config or _try_test_file_project_config(filename) or {}
+    project_config = project_config or {}
+    if "__src__" not in project_config:
+        project_config.update(_try_test_file_project_config(filename) or {})
     return _merge_test_config(project_config, test_fm)
 
 
@@ -653,10 +656,12 @@ def _merge_test_config(project_config: TestConfig, test_fm: FrontMatter) -> Test
 
 
 def front_matter_to_config(fm: FrontMatter) -> TestConfig:
+    src = fm.get("__src__")
     try:
-        return fm["tool"]["groktest"]
+        config = fm["tool"]["groktest"]
     except KeyError:
-        return _mapped_front_matter_config(fm)
+        config = _mapped_front_matter_config(fm)
+    return {**config, **({"__src__": src} if src else {})}
 
 
 FRONT_MATTER_TO_CONFIG = {
@@ -1216,7 +1221,8 @@ def _test_options_for_config(config: TestConfig, filename: str):
     if not options:
         return cast(TestOptions, {})
     parsed: TestOptions = {}
-    for part in _coerce_list(options):
+    # Visible options in reverse order as left-most takes priority
+    for part in reversed(_coerce_list(options)):
         if not isinstance(part, str):
             log.warning("Invalid option %r in %s: expected string", part, filename)
             continue
@@ -1579,7 +1585,6 @@ def _load_toml(filename: str):
                     f"Unexpected config in {filename}: expected "
                     f"mapping but got {type(data).__name__}"
                 )
-            log.debug("Using project config in %s", filename)
             data["__src__"] = filename
             return data
 
