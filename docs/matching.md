@@ -103,71 +103,80 @@ The token is consumed from left to right.
 Groktest's `parse` option enables parse matching. Parse matching is
 implemented by `groktest.parse_match`.
 
-    >>> def parse_match(expected, test_output, options=None, types=None):
-    ...     from groktest import parse_match as parse_match0
+Create a proxy for runner state, which is used by the `parse_match`
+function.
+
+    >>> class StateProxy:
+    ...     def __init__(self, config):
+    ...         from groktest import _parse_type_functions
+    ...         self.parse_functions = _parse_type_functions(config)
+
+    >>> def match(expected, test_output, options=None, types=None):
+    ...     from groktest import parse_match
     ...     config = {"parse": {"types": types}} if types else {}
-    ...     m = parse_match0(expected, test_output, options, config)
+    ...     state = StateProxy(config)
+    ...     m = parse_match(expected, test_output, options, state)
     ...     print(m.vars if m.match else None)
 
 Match simple output.
 
-    >>> parse_match("1", "1")
+    >>> match("1", "1")
     {}
 
 Use format expressions.
 
-    >>> parse_match("{}", "1")
+    >>> match("{}", "1")
     {}
 
-    >>> parse_match("{:d}", "1")
+    >>> match("{:d}", "1")
     {}
 
-    >>> parse_match("{:D}", "1")
+    >>> match("{:D}", "1")
     None
 
-    >>> parse_match("A {} cat", "A blue cat")
+    >>> match("A {} cat", "A blue cat")
     {}
 
-    >>> parse_match("A {} cat", "A red cat")
+    >>> match("A {} cat", "A red cat")
     {}
 
-    >>> parse_match("A {} cat", "A red dog")
+    >>> match("A {} cat", "A red dog")
     None
 
-    >>> parse_match("A {} cat", "A blue and red cat")
+    >>> match("A {} cat", "A blue and red cat")
     {}
 
-    >>> parse_match("A {:w} cat", "A blue and red cat")
+    >>> match("A {:w} cat", "A blue and red cat")
     None
 
 Use variables.
 
-    >>> parse_match("{x:d}", "1")
+    >>> match("{x:d}", "1")
     {'x': 1}
 
-    >>> parse_match("A {desc} cat", "A blue cat")
+    >>> match("A {desc} cat", "A blue cat")
     {'desc': 'blue'}
 
-    >>> parse_match("A {desc} cat", "A blue and red cat")
+    >>> match("A {desc} cat", "A blue and red cat")
     {'desc': 'blue and red'}
 
 Groktest match support can be customized with custom match types.
 
-    >>> parse_match(
+    >>> match(
     ...     "A {:color} cat",
     ...     "A blue cat",
     ...     types={"color": "blue|red"}
     ... )
     {}
 
-    >>> parse_match(
+    >>> match(
     ...     "A {color:color} cat",
     ...     "A red cat",
     ...     types={"color": "blue|red"}
     ... )
     {'color': 'red'}
 
-    >>> parse_match(
+    >>> match(
     ...     "A {:color} cat",
     ...     "A green cat",
     ...     types={"color": "blue|red"}
@@ -176,17 +185,17 @@ Groktest match support can be customized with custom match types.
 
 By default matches are case sensitive.
 
-    >>> parse_match("Hello", "hello")
+    >>> match("Hello", "hello")
     None
 
 Compare with case insensitive.
 
-    >>> parse_match("Hello", "hello", options={"case": False})
+    >>> match("Hello", "hello", options={"case": False})
     {}
 
 Patterns match across multiple lines.
 
-    >>> parse_match(
+    >>> match(
     ... """
     ... Traceback (most recent call last):
     ... {stack}
@@ -204,16 +213,16 @@ Patterns match across multiple lines.
 
 Non-patterns are sensitive to line-endings.
 
-    >>> parse_match("a b", "a\nb")
+    >>> match("a b", "a\nb")
     None
 
-    >>> parse_match("a b", "\na b\n")
+    >>> match("a b", "\na b\n")
     None
 
 To match the previous example, the leading and trailing line-endings
 need to be stripped.
 
-    >>> parse_match("a b", "\na b\n".strip())
+    >>> match("a b", "\na b\n".strip())
     {}
 
 ### Parse matching and case

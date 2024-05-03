@@ -46,6 +46,8 @@ __all__ = [
     "TestTypeNotSupported",
     "init_runner_state",
     "match_test_output",
+    "matcher",
+    "parse_match",
     "parse_tests",
     "start_runtime",
     "test_file",
@@ -127,29 +129,6 @@ class TestSpec:
         self.option_candidates = option_candidates
 
 
-class TestMatch:
-    def __init__(
-        self,
-        match: bool,
-        vars: Optional[Dict[str, Any]] = None,
-        reason: Optional[Any] = None,
-    ):
-        self.match = match
-        self.vars = vars
-        self.reason = reason
-
-
-TestMatcher = Callable[
-    [
-        str,
-        str,
-        Optional[TestOptions],
-        Optional[TestConfig],
-    ],
-    TestMatch,
-]
-
-
 class Test:
     def __init__(
         self,
@@ -224,7 +203,8 @@ class RunnerState:
         spec: TestSpec,
         config: TestConfig,
         filename: str,
-        print_output: Printer,
+        print_output: Optional[Printer] = None,
+        parse_functions: Optional[ParseTypeFunctions] = None,
     ):
         self.tests = tests
         self.runtime = runtime
@@ -233,7 +213,8 @@ class RunnerState:
         self.config = config
         self.summary = TestSummary()
         self.skip_rest = False
-        self.print_output = print_output
+        self.print_output = print_output or print
+        self.parse_functions = parse_functions or {}
 
 
 class DocTestRunnerState:
@@ -241,6 +222,29 @@ class DocTestRunnerState:
         self.filename = filename
         self.config = config
         self.results = TestSummary()
+
+
+class TestMatch:
+    def __init__(
+        self,
+        match: bool,
+        vars: Optional[Dict[str, Any]] = None,
+        reason: Optional[Any] = None,
+    ):
+        self.match = match
+        self.vars = vars
+        self.reason = reason
+
+
+TestMatcher = Callable[
+    [
+        str,
+        str,
+        Optional[TestOptions],
+        Optional[RunnerState],
+    ],
+    TestMatch,
+]
 
 
 DEFAULT_TEST_PATTERN = r"""
@@ -345,22 +349,8 @@ def init_runner_state(
         test_config,
         filename,
         print_output or print,
-    )
-
-
-def init_test_runner_state(
-    spec: TestSpec,
-    filename: Optional[str] = None,
-    print_output: Optional[Printer] = None,
-):
-    runtime = start_runtime(spec.runtime)
-    return RunnerState(
-        [],
-        runtime,
-        spec,
-        {},
-        filename or "<test>",
-        print_output or print,
+        _parse_type_functions(test_config),
+        _option_functions(test_config),
     )
 
 
@@ -770,6 +760,132 @@ def start_runtime(name: str, config: Optional[TestConfig] = None):
         return rt
 
 
+def _parse_type_functions(config: TestConfig) -> ParseTypeFunctions:
+    return {
+        **_module_parse_type_functions(config),
+        **_regex_parse_type_functions(config),
+    }
+
+
+def _module_parse_type_functions(config: TestConfig) -> ParseTypeFunctions:
+    try:
+        functions_spec = config["parse"]["functions"]
+    except KeyError:
+        return {}
+    else:
+        functions_specs = _coerce_list(functions_spec)
+        path = _config_src_path(config)
+        return dict(_iter_parse_functions(functions_specs, path))
+
+
+def _config_src_path(config: TestConfig):
+    config_src: List[str] = _coerce_list(config["__src__"])
+    return [os.path.dirname(path) for path in config_src]
+
+
+def _iter_parse_functions(
+    specs: List[Any],
+    path: List[str],
+) -> Generator[Tuple[str, ParseTypeFunction], None, None]:
+    for spec in specs:
+        log.debug("Loading parse functions from %s", spec)
+        module = _try_load_module(spec, path)
+        if not module:
+            continue
+        found = 0
+        for f in _iter_module_parse_functions(module):
+            found += 1
+            type_name = _parse_type_name(f)
+            log.debug(
+                "Registering parse function %s as '%s' type", f.__name__, type_name
+            )
+            yield type_name, f
+        if not found:
+            log.debug("No parse functions found in %s", spec)
+
+
+def _try_load_module(spec: str, path: List[str]):
+    if not isinstance(spec, str):
+        log.warning("Invalid value for functions %r, expected a string", spec)
+        return None
+    _ensure_sys_path_for_doc_tests(path)
+    try:
+        return importlib.import_module(spec)
+    except Exception as e:
+        if log.getEffectiveLevel() <= logging.DEBUG:
+            log.exception("Loading module %r", spec)
+        else:
+            log.warning("Error loading functions from %r: %r", spec, e)
+        return None
+
+
+def _ensure_sys_path_for_doc_tests(doctest_path: List[str]):
+    # Add in reverse order as doctest path goes from more specific (test
+    # file path) to less specific (project path)
+    for p in reversed(doctest_path):
+        if p not in sys.path:
+            sys.path.append(p)
+
+
+def _parse_type_name(f: Callable[[str], Any]):
+    try:
+        return getattr(f, "type_name")
+    except AttributeError:
+        name = f.__name__
+        assert name.startswith("parse_")
+        return name[6:]
+
+
+def _iter_module_parse_functions(
+    module: ModuleType,
+) -> Generator[ParseTypeFunction, None, None]:
+    for name in _exported_names(module, "parse_"):
+        x = getattr(module, name)
+        if _is_parse_function(x):
+            yield x
+
+
+def _exported_names(module: ModuleType, prefix: str):
+    all = getattr(module, "__all__", [])
+    if isinstance(all, str):
+        all = all.split()
+    return [name for name in (all or dir(module)) if name.startswith(prefix)]
+
+
+def _is_parse_function(x: Any):
+    # Simple sniff-test for callable with at least one arg
+    try:
+        sig = inspect.signature(x)
+    except TypeError:
+        return False
+    else:
+        return len(sig.parameters) >= 1
+
+
+def _regex_parse_type_functions(config: TestConfig) -> ParseTypeFunctions:
+    try:
+        types = config["parse"]["types"]
+    except KeyError:
+        return {}
+    else:
+        return {
+            type_name: _parselib_regex_converter(pattern)
+            for type_name, pattern in types.items()
+        }
+
+
+def _parselib_regex_converter(pattern: str):
+    def f(s: str):
+        return s
+
+    f.pattern = pattern
+    return f
+
+
+def _option_functions(config: TestConfig):
+    return cast(OptionFunctions, {})
+
+
 def test_file(
     filename: str,
     config: Optional[ProjectConfig] = None,
@@ -785,7 +901,7 @@ def test_file(
     _apply_skip_for_solo(state.tests)
     with RuntimeScope(state.runtime):
         for test in state.tests:
-            test_options = _test_options(test, state.config, state.spec)
+            test_options = _test_options(test, state)
             _apply_skip_rest(test_options, state)
             if _skip_test(test_options, state):
                 _handle_test_skipped(test, state)
@@ -867,13 +983,16 @@ def _log_test_result_match(
 
 
 def _try_match_output_candidates(
-    output_candidates: List[str], expected: str, test: Test, state: RunnerState
+    output_candidates: List[str],
+    expected: str,
+    test: Test,
+    state: RunnerState,
 ):
     assert output_candidates
     match = None
     matched_output = None
     for output in output_candidates:
-        match = match_test_output(expected, output, test, state.config, state.spec)
+        match = match_test_output(expected, output, test, state)
         matched_output = output
         if match.match:
             break
@@ -971,27 +1090,26 @@ def match_test_output(
     expected: str,
     test_output: str,
     test: Test,
-    config: TestConfig,
-    spec: TestSpec,
+    state: RunnerState,
 ):
-    options = _test_options(test, config, spec)
-    return matcher(options)(expected, test_output, options, config)
+    test_options = _test_options(test, state)
+    return matcher(test_options)(expected, test_output, test_options, state)
 
 
-def _test_options(test: Test, config: TestConfig, spec: TestSpec):
+def _test_options(test: Test, state: RunnerState):
     options = {
-        **_parse_config_options(config, test.filename),
+        **_test_options_for_config(state.config, test.filename),
         **test.options,
     }
-    _maybe_apply_spec_wildcard(spec, options)
+    _maybe_apply_spec_wildcard(state.spec, options)
     return cast(TestOptions, options)
 
 
-def _parse_config_options(config: TestConfig, filename: str):
-    parsed: TestOptions = {}
+def _test_options_for_config(config: TestConfig, filename: str):
     options = config.get("options")
     if not options:
-        return parsed
+        return cast(TestOptions, {})
+    parsed: TestOptions = {}
     for part in _coerce_list(options):
         if not isinstance(part, str):
             log.warning("Invalid option %r in %s: expected string", part, filename)
@@ -1033,12 +1151,11 @@ def parse_match(
     expected: str,
     test_output: str,
     options: Optional[TestOptions] = None,
-    config: Optional[TestConfig] = None,
+    state: Optional[RunnerState] = None,
 ):
     options = options or {}
-    config = config or {}
     case_sensitive = _option_value("case", options, True)
-    extra_types = _parselib_types(config)
+    extra_types = state.parse_functions if state else {}
     try:
         m = parselib.parse(
             expected,
@@ -1066,132 +1183,11 @@ def _option_value(name: str, options: Dict[str, Any], default: Any):
         return val
 
 
-def _parselib_types(config: TestConfig) -> ParseTypeFunctions:
-    return {
-        **_parselib_module_types(config),
-        **_parselib_regex_types(config),
-    }
-
-
-def _parselib_module_types(config: TestConfig) -> ParseTypeFunctions:
-    try:
-        functions_spec = config["parse"]["functions"]
-    except KeyError:
-        return {}
-    else:
-        functions_spec = _coerce_list(functions_spec)
-        path = _config_src_path(config)
-        return dict(_iter_parse_functions(functions_spec, path))
-
-
-def _config_src_path(config: TestConfig):
-    config_src: List[str] = _coerce_list(config["__src__"])
-    return [os.path.dirname(path) for path in config_src]
-
-
-def _iter_parse_functions(
-    specs: List[Any],
-    path: List[str],
-) -> Generator[Tuple[str, ParseTypeFunction], None, None]:
-    for spec in specs:
-        log.debug("Loading parse functions from %s", spec)
-        module = _try_load_module(spec, path)
-        if not module:
-            continue
-        found = 0
-        for f in _iter_module_parse_functions(module):
-            found += 1
-            type_name = _parse_type_name(f)
-            log.debug("Registering function %s as '%s' type", f.__name__, type_name)
-            yield type_name, f
-        if not found:
-            log.debug("No parse functions found in %s", spec)
-
-
-def _try_load_module(spec: str, path: List[str]):
-    if not isinstance(spec, str):
-        log.warning("Invalid value for type-functions %r, expected a string", spec)
-        return None
-    _ensure_sys_path_for_doc_tests(path)
-    try:
-        return importlib.import_module(spec)
-    except Exception as e:
-        if log.getEffectiveLevel() <= logging.DEBUG:
-            log.exception("Loading module %r", spec)
-        else:
-            log.warning("Error loading parse functions from %r: %r", spec, e)
-        return None
-
-
-def _ensure_sys_path_for_doc_tests(doctest_path: List[str]):
-    # Add in reverse order as doctest path goes from more specific (test
-    # file path) to less specific (project path)
-    for p in reversed(doctest_path):
-        if p not in sys.path:
-            sys.path.append(p)
-
-
-def _parse_type_name(f: Callable[[str], Any]):
-    try:
-        return getattr(f, "type_name")
-    except AttributeError:
-        name = f.__name__
-        assert name.startswith("parse_")
-        return name[6:]
-
-
-def _iter_module_parse_functions(
-    module: ModuleType,
-) -> Generator[ParseTypeFunction, None, None]:
-    for name in _module_parse_names(module):
-        x = getattr(module, name)
-
-        if _is_parse_function(x):
-            yield x
-
-
-def _module_parse_names(module: ModuleType):
-    all = getattr(module, "__all__", [])
-    if isinstance(all, str):
-        all = all.split()
-    return [name for name in (all or dir(module)) if name.startswith("parse_")]
-
-
-def _is_parse_function(x: Any):
-    # Simple sniff test for callable with at least one arg
-    try:
-        sig = inspect.signature(x)
-    except TypeError:
-        return False
-    else:
-        return len(sig.parameters) >= 1
-
-
-def _parselib_regex_types(config: TestConfig) -> ParseTypeFunctions:
-    try:
-        types = config["parse"]["types"]
-    except KeyError:
-        return {}
-    else:
-        return {
-            type_name: _parselib_regex_converter(pattern)
-            for type_name, pattern in types.items()
-        }
-
-
-def _parselib_regex_converter(pattern: str):
-    def f(s: str):
-        return s
-
-    f.pattern = pattern
-    return f
-
-
 def str_match(
     expected: str,
     test_output: str,
     options: Optional[TestOptions] = None,
-    config: Optional[TestConfig] = None,
+    state: Optional[RunnerState] = None,
 ):
     options = options or {}
     expected, test_output = _apply_transform_options(expected, test_output, options)

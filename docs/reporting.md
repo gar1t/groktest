@@ -17,9 +17,9 @@ following:
 
 For tests, create a runner state that uses a Python runtime.
 
-    >>> from groktest import init_test_runner_state, PYTHON_SPEC
-
-    >>> state = init_test_runner_state(PYTHON_SPEC, {"sep": False})
+    >>> from groktest import RunnerState, PYTHON_SPEC, start_runtime
+    >>> runtime = start_runtime(PYTHON_SPEC.runtime)
+    >>> state = RunnerState([], runtime, PYTHON_SPEC, {"sep": False}, "<test>")
 
 Function to test an example and print a result.
 
