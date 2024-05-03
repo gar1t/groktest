@@ -16,12 +16,13 @@ import tempfile
 import threading
 
 from .__init__ import __version__
-from .__init__ import test_file
-from .__init__ import load_project_config
+from .__init__ import Panic
 from .__init__ import ProjectDecodeError
 from .__init__ import Test
 from .__init__ import TestSummary
 from .__init__ import TestTypeNotSupported
+from .__init__ import test_file
+from .__init__ import load_project_config
 
 # Defer init to `_init_logging()`
 log: logging.Logger = cast(logging.Logger, None)
@@ -197,8 +198,10 @@ def _handle_test_error(filename: str, e: Exception):
         log.warning("%s is a directory, skipping", filename)
     elif isinstance(e, TestTypeNotSupported):
         log.warning("Test type '%s' for %s is not supported, skipping", e, filename)
+    elif isinstance(e, Panic):
+        log.warning("Stopped testing %s because of an unhandled error", filename)
     else:
-        log.error("Unhandled error for %s: %r", filename, e)
+        raise AssertionError((filename, e))
 
 
 def _print_summary_and_exit(summary: ResultSummary, config: ProjectConfig):

@@ -64,6 +64,10 @@ class Skip(RuntimeError):
         super().__init__("skip")
 
 
+class Panic(Exception):
+    pass
+
+
 class Error(Exception):
     pass
 
@@ -944,7 +948,13 @@ def test_file(
 
 
 def run_test(test: Test, options: TestOptions, state: RunnerState):
-    result = state.runtime.exec_test_expr(test, options)
+    try:
+        result = state.runtime.exec_test_expr(test, options)
+    except Exception as e:
+        if log.getEffectiveLevel() <= logging.DEBUG:
+            log.exception("")
+        log.error("Unhandled error running test at %s:%s: %s", test.filename, test.line, e)
+        raise Panic()
     _handle_test_result(result, test, options, state)
 
 
