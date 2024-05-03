@@ -944,14 +944,8 @@ def test_file(
 
 
 def run_test(test: Test, options: TestOptions, state: RunnerState):
-    try:
-        result = state.runtime.exec_test_expr(test, options)
-    except RuntimeError:
-        raise
-    except Exception as e:
-        raise RuntimeError(e)
-    else:
-        _handle_test_result(result, test, options, state)
+    result = state.runtime.exec_test_expr(test, options)
+    _handle_test_result(result, test, options, state)
 
 
 def _apply_skip_for_solo(tests: List[Test]):

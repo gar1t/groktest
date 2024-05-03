@@ -191,8 +191,15 @@ def _write_test_exec_req(test: Test, options: TestOptions, out: IO[str]):
 
 
 def _read_test_result(input: IO[str]):
-    resp = json.loads(input.readline())
-    return TestResult(resp["code"], resp["output"], resp.get("short-error"))
+    resp_raw = input.readline()
+    if not resp_raw:
+        return TestResult(-9, "", "")
+    try:
+        resp = json.loads(resp_raw)
+    except json.JSONDecodeError as e:
+        return TestResult(-9, "", f"Invalid resp from runtime server: {resp_raw}")
+    else:
+        return TestResult(resp["code"], resp["output"], resp.get("short-error"))
 
 
 def _update_vars(vars: Dict[str, Any], proc: Popen[str]):
