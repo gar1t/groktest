@@ -97,15 +97,30 @@ enabled or disabled, When enabled, an option may have a value.
   Capture standard error as well as standard output in the expected
   output.
 
-  Runtimes supported: Python
+## Custom options
 
-## Parsing options
+Use `option-functions` to specify one or more modules that define option
+functions.
+
+An option function is named starting with `option_`. By default, the
+option name is inferred from the function name. `option_xxx` for
+example, defines the option `xxx`.
+
+The function can provide an `option_name` attribute to specify the
+option name.
+
+`example/custom-options.md` illustrates how custom options are defined
+and used.
+
+## Implementation notes
+
+### Parsing options
 
 Groktest uses the private function `_parse_config_options`.
 
     >>> def parse(options):
-    ...     from groktest import _parse_config_options
-    ...     pprint(_parse_config_options({"options": options}, "<test>"))
+    ...     from groktest import _test_options_for_config
+    ...     pprint(_test_options_for_config({"options": options}, "<test>"))
 
 Options are specified using `+<name>` and `-<name>` to enable and
 disable an option respectively.

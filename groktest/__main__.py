@@ -225,7 +225,8 @@ def _print_skipped(skipped: list[SummaryTest], config: ProjectConfig):
     show_skipped = config.get("show-skipped")
     print(
         f"{len(skipped)} {'test' if len(skipped) == 1 else 'tests'} skipped"
-        f"{'' if show_skipped else ' (use --show-skipped to view)'}")
+        f"{'' if show_skipped else ' (use --show-skipped to view)'}"
+    )
     if config.get("show-skipped"):
         for test in skipped:
             print(f" - {os.path.relpath(test.filename)}:{test.line}")

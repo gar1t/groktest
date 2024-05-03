@@ -1,6 +1,13 @@
+from typing import *
+
 import re
 
-__all__ = ["parse_ver", "parse_upper", "option_skip_red"]
+__all__ = [
+    "parse_ver",
+    "parse_upper",
+    "option_skip_red",
+    "option_table",
+]
 
 # See https://github.com/r1chardj0n3s/parse#custom-type-conversions
 
@@ -31,8 +38,23 @@ def parse_internal(s: str):
     return s
 
 
-def option_skip_red(val: str):
-    return val == "red"
+def option_skip_red(val: Any):
+    if val == "red":
+        raise RuntimeError("skip")
 
 
 option_skip_red.option_name = "skip-red"
+
+
+def option_table(val: Any):
+    def t(want: str, got: str):
+        return _strip_table(want), _strip_table(got)
+
+    if True:
+        return t
+
+
+def _strip_table(s: str):
+    p1 = re.compile(r" +\|")
+    p2 = re.compile(r"-+\|")
+    return "\n".join([p2.sub(p1.sub(line, " |"), "-|") for line in s.split("\n")])

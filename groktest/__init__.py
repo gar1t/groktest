@@ -59,8 +59,9 @@ __version__ = "0.2.0"  # Sync with pyproject.toml
 log = logging.getLogger("groktest")
 
 
-class Skip(Exception):
-    pass
+class Skip(RuntimeError):
+    def __init__(self):
+        super().__init__("skip")
 
 
 class Error(Exception):
@@ -95,7 +96,7 @@ ParseTypeFunctions = Dict[str, ParseTypeFunction]
 
 TransformFunction = Callable[[str, str], tuple[str, str]]
 
-OptionFunction = Callable[["Test"], Optional[TransformFunction]]
+OptionFunction = Callable[[Any, TestOptions, "Test"], Optional[TransformFunction]]
 
 OptionFunctions = dict[str, OptionFunction]
 
@@ -921,7 +922,7 @@ def test_file(
         for test in state.tests:
             test_options = _test_options(test, state)
             _apply_skip_rest(test_options, state)
-            if _skip_test(test_options, state):
+            if _skip_test(test, test_options, state):
                 _handle_test_skipped(test, state)
             else:
                 run_test(test, test_options, state)
@@ -951,11 +952,42 @@ def _apply_skip_rest(options: TestOptions, state: RunnerState):
     state.skip_rest = _option_value("skiprest", options, state.skip_rest)
 
 
-def _skip_test(options: TestOptions, state: RunnerState):
-    val = _option_value("skip", options, state.skip_rest)
-    if isinstance(val, str):
-        return bool(os.getenv(val))
-    return val
+def _skip_test(test: Test, options: TestOptions, state: RunnerState):
+    val = _option_value("skip", options, None)
+    if val is None:
+        val = _try_option_function_skip(test, options, state)
+    elif isinstance(val, str):
+        val = bool(os.getenv(val))
+    return val if val is not None else state.skip_rest
+
+
+def _try_option_function_skip(test: Test, options: TestOptions, state: RunnerState):
+    for name, f in state.option_functions.items():
+        val = options.get(name)
+        if val is None:
+            continue
+        try:
+            _apply_option_args(f, val, options, test)
+        except Skip:
+            return True
+        except Exception as e:
+            if e.args == ("skip",):
+                return True
+            if log.getEffectiveLevel() <= logging.DEBUG:
+                log.exception(name)
+            log.warning(
+                "Error evaluating option '%s' at %s:%i: %s",
+                name,
+                test.filename,
+                test.line,
+                e,
+            )
+    return None
+
+
+def _apply_option_args(f: Callable[..., Any], *args: Any):
+    f_arg_count = len(inspect.signature(f).parameters)
+    f(*args[:f_arg_count])
 
 
 def _handle_test_skipped(test: Test, state: RunnerState):
