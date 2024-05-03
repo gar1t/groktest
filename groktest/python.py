@@ -243,7 +243,8 @@ def _readline():
     try:
         return sys.stdin.readline().rstrip()
     except OSError as e:
-        log.error("Reading from stdin: %s", e)
+        if e.errno != 22:  # stream closed
+            raise
         return ""
 
 
@@ -358,7 +359,8 @@ def _exec_test(test: TestReq, globals: Dict[str, Any]):
     except AssertionError as e:
         _maybe_apply_code_vars(e, code, globals)
         raise
-    _maybe_pretty_print_result(result, test.options)
+    else:
+        _maybe_pretty_print_result(result, test.options)
 
 
 def _maybe_apply_code_vars(e: AssertionError, code: CodeType, globals: Dict[str, Any]):
