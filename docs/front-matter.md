@@ -299,6 +299,7 @@ The mapping of simplified front matter to config is described by
 
     >>> FRONT_MATTER_TO_CONFIG  # +pprint
     {'nushell-init': ['nushell', 'init'],
+     'option-functions': ['option', 'functions'],
      'parse-functions': ['parse', 'functions'],
      'parse-types': ['parse', 'types'],
      'python-init': ['python', 'init'],

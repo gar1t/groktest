@@ -1,6 +1,6 @@
 import re
 
-__all__ = ["parse_ver", "parse_upper"]
+__all__ = ["parse_ver", "parse_upper", "option_skip_red"]
 
 # See https://github.com/r1chardj0n3s/parse#custom-type-conversions
 
@@ -29,3 +29,10 @@ parse_upper.type_name = "loud"
 # Not available to tests as it's not defined in `__all__`
 def parse_internal(s: str):
     return s
+
+
+def option_skip_red(val: str):
+    return val == "red"
+
+
+option_skip_red.option_name = "skip-red"

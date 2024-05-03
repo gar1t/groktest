@@ -38,6 +38,7 @@ __all__ = [
     "Runtime",
     "RuntimeNotSupported",
     "SPECS",
+    "Skip",
     "Test",
     "TestMatch",
     "TestMatcher",
@@ -56,6 +57,10 @@ __all__ = [
 __version__ = "0.2.0"  # Sync with pyproject.toml
 
 log = logging.getLogger("groktest")
+
+
+class Skip(Exception):
+    pass
 
 
 class Error(Exception):
@@ -87,6 +92,12 @@ ParseTypes = Dict[str, str]
 ParseTypeFunction = Callable[[str], Any]
 
 ParseTypeFunctions = Dict[str, ParseTypeFunction]
+
+TransformFunction = Callable[[str, str], tuple[str, str]]
+
+OptionFunction = Callable[["Test"], Optional[TransformFunction]]
+
+OptionFunctions = dict[str, OptionFunction]
 
 
 class TestSummary:
@@ -205,6 +216,7 @@ class RunnerState:
         filename: str,
         print_output: Optional[Printer] = None,
         parse_functions: Optional[ParseTypeFunctions] = None,
+        option_functions: Optional[OptionFunctions] = None,
     ):
         self.tests = tests
         self.runtime = runtime
@@ -215,6 +227,7 @@ class RunnerState:
         self.skip_rest = False
         self.print_output = print_output or print
         self.parse_functions = parse_functions or {}
+        self.option_functions = option_functions or {}
 
 
 class DocTestRunnerState:
@@ -648,6 +661,7 @@ def front_matter_to_config(fm: FrontMatter) -> TestConfig:
 FRONT_MATTER_TO_CONFIG = {
     "parse-types": ["parse", "types"],
     "parse-functions": ["parse", "functions"],
+    "option-functions": ["option", "functions"],
     "python-init": ["python", "init"],
     "test-options": ["options"],
     "nushell-init": ["nushell", "init"],
@@ -769,13 +783,13 @@ def _parse_type_functions(config: TestConfig) -> ParseTypeFunctions:
 
 def _module_parse_type_functions(config: TestConfig) -> ParseTypeFunctions:
     try:
-        functions_spec = config["parse"]["functions"]
+        spec = config["parse"]["functions"]
     except KeyError:
         return {}
     else:
-        functions_specs = _coerce_list(functions_spec)
-        path = _config_src_path(config)
-        return dict(_iter_parse_functions(functions_specs, path))
+        spec = _coerce_list(spec)
+        module_path = _config_src_path(config)
+        return dict(_iter_named_functions(spec, module_path, "parse_", "type_name"))
 
 
 def _config_src_path(config: TestConfig):
@@ -783,25 +797,21 @@ def _config_src_path(config: TestConfig):
     return [os.path.dirname(path) for path in config_src]
 
 
-def _iter_parse_functions(
-    specs: List[Any],
-    path: List[str],
-) -> Generator[Tuple[str, ParseTypeFunction], None, None]:
-    for spec in specs:
-        log.debug("Loading parse functions from %s", spec)
-        module = _try_load_module(spec, path)
+def _iter_named_functions(
+    modules: List[Any],
+    module_path: List[str],
+    function_prefix: str,
+    name_attr: str,
+) -> Generator[Tuple[str, Callable[..., Any]], None, None]:
+    for module_name in modules:
+        log.debug("Loading parse functions from %s", module_name)
+        module = _try_load_module(module_name, module_path)
         if not module:
             continue
-        found = 0
-        for f in _iter_module_parse_functions(module):
-            found += 1
-            type_name = _parse_type_name(f)
-            log.debug(
-                "Registering parse function %s as '%s' type", f.__name__, type_name
-            )
-            yield type_name, f
-        if not found:
-            log.debug("No parse functions found in %s", spec)
+        for f in _iter_module_functions(module, function_prefix):
+            function_name = _function_name(f, name_attr, function_prefix)
+            log.debug("Registering function %s as '%s' type", f.__name__, function_name)
+            yield function_name, f
 
 
 def _try_load_module(spec: str, path: List[str]):
@@ -827,21 +837,22 @@ def _ensure_sys_path_for_doc_tests(doctest_path: List[str]):
             sys.path.append(p)
 
 
-def _parse_type_name(f: Callable[[str], Any]):
+def _function_name(f: Callable[[str], Any], name_attr: str, prefix: str):
     try:
-        return getattr(f, "type_name")
+        return getattr(f, name_attr)
     except AttributeError:
         name = f.__name__
-        assert name.startswith("parse_")
-        return name[6:]
+        assert name.startswith(prefix)
+        return name[len(prefix) :]
 
 
-def _iter_module_parse_functions(
+def _iter_module_functions(
     module: ModuleType,
+    function_prefix: str,
 ) -> Generator[ParseTypeFunction, None, None]:
-    for name in _exported_names(module, "parse_"):
+    for name in _exported_names(module, function_prefix):
         x = getattr(module, name)
-        if _is_parse_function(x):
+        if _is_function(x):
             yield x
 
 
@@ -852,7 +863,7 @@ def _exported_names(module: ModuleType, prefix: str):
     return [name for name in (all or dir(module)) if name.startswith(prefix)]
 
 
-def _is_parse_function(x: Any):
+def _is_function(x: Any):
     # Simple sniff-test for callable with at least one arg
     try:
         sig = inspect.signature(x)
@@ -882,8 +893,15 @@ def _parselib_regex_converter(pattern: str):
     return f
 
 
-def _option_functions(config: TestConfig):
-    return cast(OptionFunctions, {})
+def _option_functions(config: TestConfig) -> OptionFunctions:
+    try:
+        spec = config["option"]["functions"]
+    except KeyError:
+        return {}
+    else:
+        spec = _coerce_list(spec)
+        module_path = _config_src_path(config)
+        return dict(_iter_named_functions(spec, module_path, "option_", "option_name"))
 
 
 def test_file(
