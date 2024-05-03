@@ -242,7 +242,8 @@ def _print_failed(failed: list[SummaryTest], config: ProjectConfig):
 
 
 def _print_version_and_exit():
-    print(f"Groktest {__version__}")
+    with stdout_lock:
+        print(f"Groktest {__version__}")
     raise SystemExit(0)
 
 

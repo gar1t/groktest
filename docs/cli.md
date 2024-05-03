@@ -23,3 +23,8 @@ Run Groktest using the `groktest` command.
       --debug               Show debug info.
     ⤶
     <0>
+
+    >>> run("groktest --version")
+    Groktest 0.2.0
+    ⤶
+    <0>
