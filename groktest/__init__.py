@@ -198,10 +198,19 @@ class RuntimeScope:
         return self
 
     def __exit__(self, *exc: Any):
-        if self.stop_timeout is not None:
-            self.runtime.stop(self.stop_timeout)
-        else:
-            self.runtime.stop()
+        try:
+            _stop_runtime(self.runtime, self.stop_timeout)
+        except Exception as e:
+            if log.getEffectiveLevel() <= logging.DEBUG:
+                log.exception("Stopping runtime")
+            log.error("Error stopping runtime: %s", e)
+
+
+def _stop_runtime(runtime: Runtime, timeout: Optional[int]):
+    if timeout is not None:
+        runtime.stop(timeout)
+    else:
+        runtime.stop()
 
 
 Printer = Callable[[str], None]
