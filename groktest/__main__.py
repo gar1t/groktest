@@ -29,6 +29,18 @@ EXIT_FAILED = 1
 EXIT_NO_TESTS = 2
 
 
+stdout_lock = threading.Lock()
+
+
+def _safe_print(s: str):
+    assert stdout_lock.locked()
+    sys.stdout.write(s)
+    sys.stdout.write("\n")
+
+
+print = _safe_print
+
+
 class TestQueue(queue.Queue):
     def __init__(self, filenames: list[str]):
         super().__init__()
@@ -115,14 +127,18 @@ def main(args: Any = None):
     runners = _init_runners(queue, config, args)
     summary = ResultSummary()
     for test in queue:
-        print(f"Testing {test}")
-        result = test.wait_for_result()
+        with stdout_lock:
+            print(f"Testing {test}")
+        with stdout_lock:
+            result = test.wait_for_result()
         output = test.get_output()
         if output:
-            print(output)
+            with stdout_lock:
+                print(output)
         _handle_test_result(test.filename, result, summary)
     _join_runners(runners)
-    _print_result_summary(summary)
+    with stdout_lock:
+        _print_result_summary(summary)
 
 
 def _preview_and_exit(queue: TestQueue):
