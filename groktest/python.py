@@ -115,8 +115,12 @@ def _proc_streams(p: Popen[str]):
 
 def _close_proc(p: Popen[str], timeout: int):
     assert p.stdin
-    p.stdin.write("\n")
-    p.stdin.flush()
+    try:
+        p.stdin.write("\n")
+        p.stdin.flush()
+    except OSError as e:
+        if e.errno != 22:  # stream closed
+            raise
     try:
         p.wait(timeout)
     except subprocess.TimeoutExpired:
