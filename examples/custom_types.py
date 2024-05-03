@@ -47,14 +47,11 @@ option_skip_red.option_name = "skip-red"
 
 
 def option_table(val: Any):
-    def t(want: str, got: str):
-        return _strip_table(want), _strip_table(got)
-
     if True:
-        return t
+        return _strip_table
 
 
 def _strip_table(s: str):
     p1 = re.compile(r" +\|")
     p2 = re.compile(r"-+\|")
-    return "\n".join([p2.sub(p1.sub(line, " |"), "-|") for line in s.split("\n")])
+    return "\n".join([p2.sub("-|", p1.sub(" |", line)) for line in s.split("\n")])

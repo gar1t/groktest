@@ -12,13 +12,15 @@ option-functions: custom_types
 
 `table` normalizes table defs in a comparison.
 
-    >>> print("""
-    ... |------|---------|--------|
-    ... | Name | Country | Height |
-    ... |------|---------|--------|
-    ... | Dog  | USA     | 2      |
-    ... | Cat  | Mexico  | 1      |
-    ... """.strip())  # +table
+    >>> some_table = """
+    ... |------|---------|--------------|
+    ... | Name | Country | Height       |
+    ... |------|---------|--------------|
+    ... | Dog  | USA     | 2            |
+    ... | Cat  | Mexico  | 1            |
+    ... """.strip()
+
+    >>> print(some_table)  # +table
     |------|---------|--------|
     | Name | Country | Height |
     |------|---------|--------|

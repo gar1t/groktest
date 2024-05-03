@@ -987,7 +987,7 @@ def _try_option_function_skip(test: Test, options: TestOptions, state: RunnerSta
 
 def _apply_option_args(f: Callable[..., Any], *args: Any):
     f_arg_count = len(inspect.signature(f).parameters)
-    f(*args[:f_arg_count])
+    return f(*args[:f_arg_count])
 
 
 def _handle_test_skipped(test: Test, state: RunnerState):
@@ -995,10 +995,13 @@ def _handle_test_skipped(test: Test, state: RunnerState):
 
 
 def _handle_test_result(
-    result: TestResult, test: Test, options: TestOptions, state: RunnerState
+    result: TestResult,
+    test: Test,
+    options: TestOptions,
+    state: RunnerState,
 ):
-    expected = _format_match_expected(test, options, state.spec)
-    output_candidates = _match_test_output_candidates(result, test, options)
+    expected = _format_match_expected(test, options, state)
+    output_candidates = _match_test_output_candidates(result, test, options, state)
     match, match_output = _try_match_output_candidates(
         output_candidates, expected, test, state
     )
@@ -1066,11 +1069,12 @@ def _handle_expected_test_failed(test: Test, options: TestOptions, state: Runner
     state.summary.tested.append(test)
 
 
-def _format_match_expected(test: Test, options: TestOptions, spec: TestSpec):
+def _format_match_expected(test: Test, options: TestOptions, state: RunnerState):
     expected = _append_lf_for_non_empty(test.expected)
-    expected = _maybe_remove_blankline_markers(expected, options, spec)
+    expected = _maybe_remove_blankline_markers(expected, options, state.spec)
     expected = _maybe_normalize_whitespace(expected, options)
     expected = _maybe_normalize_paths(expected, options)
+    expected = _apply_option_functions(expected, test, options, state)
     return expected
 
 
@@ -1111,18 +1115,70 @@ def _maybe_normalize_paths(s: str, options: TestOptions):
     return s.replace("\\\\", "\\").replace("\\", "/")
 
 
-def _match_test_output_candidates(result: TestResult, test: Test, options: TestOptions):
-    output = _format_test_output(result.output, options)
+def _apply_option_functions(
+    s: str,
+    test: Test,
+    options: TestOptions,
+    state: RunnerState,
+):
+    for name, f in state.option_functions.items():
+        val = options.get(name)
+        if val is None:
+            continue
+        f = _apply_option_args_no_raise(f, val, options, test)
+        if not f:
+            continue
+        log.debug("Applying option '%s' to string:\n%s", name, s)
+        try:
+            s = f(s)
+        except Exception as e:
+            if log.getEffectiveLevel() <= logging.DEBUG:
+                log.exception(name)
+            log.warning(
+                "Error evaluating option '%s' at %s:%i: %s",
+                name,
+                test.filename,
+                test.line,
+                e,
+            )
+        else:
+            log.debug("After option '%s':\n%s", name, s)
+
+    return s
+
+
+def _apply_option_args_no_raise(f: Callable[..., Any], *args: Any):
+    f_arg_count = len(inspect.signature(f).parameters)
+    try:
+        return f(*args[:f_arg_count])
+    except Exception:
+        log.exception(str([f, *args]))
+        return None
+
+
+def _match_test_output_candidates(
+    result: TestResult,
+    test: Test,
+    options: TestOptions,
+    state: RunnerState,
+):
+    output = _format_test_output(result.output, test, options, state)
     short_error = _maybe_short_error(result, options)
     if short_error:
-        return [output, _format_test_output(short_error, options)]
+        return [output, _format_test_output(short_error, test, options, state)]
     return [output]
 
 
-def _format_test_output(output: str, options: TestOptions):
+def _format_test_output(
+    output: str,
+    test: Test,
+    options: TestOptions,
+    state: RunnerState,
+):
     output = _truncate_empty_line_spaces(output)
     output = _maybe_normalize_whitespace(output, options)
     output = _maybe_normalize_paths(output, options)
+    output = _apply_option_functions(output, test, options, state)
     return output
 
 
