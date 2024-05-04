@@ -16,7 +16,7 @@ Run Groktest using the `groktest` command.
       -h, --help            Show this help message and exit.
       --preview             Show tests without running them.
       --last                Re-run last tests.
-      -F, --fail-fast       Stop on the first error for a file.
+      -f, --fail-fast       Stop on the first error for a file.
       -C N, --concurrency N
                             Max number of concurrent tests.
       --show-skipped        Show skipped tests in output.
