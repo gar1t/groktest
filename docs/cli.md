@@ -25,6 +25,6 @@ Run Groktest using the `groktest` command.
     <0>
 
     >>> run("groktest --version")
-    Groktest 0.2.0
+    Groktest 0.2.1
     ⤶
     <0>
