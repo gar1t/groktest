@@ -213,8 +213,14 @@ Typical configuration examples:
 Options may be specified across lines.
 
     >>> decode_options("""
-    ...   +foo
-    ...   -bar
-    ...   +baz=123
+    ... +baz=123
+    ... +foo
+    ... -bar
     ... """)  # +pprint
     {'bar': False, 'baz': 123, 'foo': True}
+
+    >>> decode_options("""
+    ... +baz='Hello there'
+    ... +foo
+    ... """)  # +pprint
+    {'baz': 'Hello there', 'foo': True}

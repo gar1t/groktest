@@ -1,7 +1,7 @@
 ---
 test-options: |
-  -case
   +wildcard=…
+  -case
 ---
 
 Test options may be specified across multiple lines in YAML config, as

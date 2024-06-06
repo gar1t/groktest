@@ -151,7 +151,7 @@ def _handle_test_retry(test: ConcurrentTest, cur_retry: int, max_retries: int):
 
 
 def _retry_on_fail_test_option(test_filename: str):
-    fm = _read_front_matter(test_filename)
+    fm = _parse_front_matter(test_filename)
     encoded_options = fm.get("test-options")
     if not encoded_options:
         return 0
@@ -167,7 +167,10 @@ def _retry_on_fail_test_option(test_filename: str):
     return val
 
 
-def _read_front_matter(filename: str):
+def _parse_front_matter(filename: str):
+    # This is intentionally different from the front matter parse in
+    # __init__ as we're only interested in test config here. We read
+    # only a much of the file as needed to parse front matter.
     fm_lines: list[str] = []
     in_fm = False
     with open(filename) as f:
@@ -175,7 +178,7 @@ def _read_front_matter(filename: str):
             line = f.readline()
             if not line:
                 break
-            line = line.strip()
+            line = line.rstrip()
             if not line and not in_fm:
                 continue
             elif line == "---":
