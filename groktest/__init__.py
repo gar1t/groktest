@@ -45,9 +45,11 @@ __all__ = [
     "TestResult",
     "TestSpec",
     "TestTypeNotSupported",
+    "decode_options",
     "init_runner_state",
     "match_test_output",
     "matcher",
+    "parse_front_matter",
     "parse_match",
     "parse_tests",
     "start_runtime",
@@ -361,7 +363,7 @@ def init_runner_state(
 ):
     filename = os.path.abspath(filename)
     contents = _read_file(filename)
-    fm = _parse_front_matter(contents, filename)
+    fm = parse_front_matter(contents, filename)
     spec = _spec_for_front_matter(fm, filename)
     test_config = _test_config(fm, project_config, filename)
     log.debug("Test config: %s", test_config)
@@ -393,7 +395,7 @@ def _norm_line_endings(b: bytes):
 _FRONT_MATTER_P = re.compile(r"\s*^---\n(.*)\n---\n?$", re.MULTILINE | re.DOTALL)
 
 
-def _parse_front_matter(s: str, filename: str):
+def parse_front_matter(s: str, filename: str):
     """Parse front matter from string.
 
     Front matter can be defined using YAML, JSON, or INI.
@@ -597,7 +599,7 @@ def _strip_prompt(s: str, prompt: str, linepos: int, filename: str):
 def _parse_test_options(expr: str, spec: TestSpec):
     options: Dict[str, Any] = {}
     for part in _test_option_candidates(expr, spec):
-        options.update(_decode_options(part))
+        options.update(decode_options(part))
     return options
 
 
@@ -696,14 +698,6 @@ def _mapped_front_matter_config(fm: FrontMatter) -> TestConfig:
             target = config.setdefault(part, {})
         target[config_path[-1]] = fm[name]
     return config
-
-
-def _merge_replace(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
-    key, val, merge_dest = _merge_kv_dest(path, src, dest)
-    if not key:
-        return
-    assert merge_dest
-    merge_dest[key] = val
 
 
 def _merge_kv_dest(
@@ -953,7 +947,9 @@ def run_test(test: Test, options: TestOptions, state: RunnerState):
     except Exception as e:
         if log.getEffectiveLevel() <= logging.DEBUG:
             log.exception("")
-        log.error("Unhandled error running test at %s:%s: %s", test.filename, test.line, e)
+        log.error(
+            "Unhandled error running test at %s:%s: %s", test.filename, test.line, e
+        )
         raise Panic()
     _handle_test_result(result, test, options, state)
 
@@ -1239,11 +1235,11 @@ def _test_options_for_config(config: TestConfig, filename: str):
         if not isinstance(part, str):
             log.warning("Invalid option %r in %s: expected string", part, filename)
             continue
-        parsed.update(_decode_options(part))
+        parsed.update(decode_options(part))
     return parsed
 
 
-def _decode_options(s: str) -> Dict[str, Any]:
+def decode_options(s: str) -> Dict[str, Any]:
     return dict(_name_val_for_option_match(m) for m in OPTIONS_PATTERN.finditer(s))
 
 

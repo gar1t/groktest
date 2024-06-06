@@ -83,11 +83,11 @@ Matches:
       "bar": 654
     }}
 
-The function `_parse_front_matter()` parses front matter specified in a
+The function `parse_front_matter` parses front matter specified in a
 string.
 
     >>> def front_matter(s: str):
-    ...     return groktest._parse_front_matter(s, "<test>")
+    ...     return groktest.parse_front_matter(s, "<test>")
 
 Missing front matter:
 

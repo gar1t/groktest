@@ -21,8 +21,10 @@ from .__init__ import ProjectDecodeError
 from .__init__ import Test
 from .__init__ import TestSummary
 from .__init__ import TestTypeNotSupported
-from .__init__ import test_file
+from .__init__ import decode_options
 from .__init__ import load_project_config
+from .__init__ import parse_front_matter
+from .__init__ import test_file
 
 # Defer init to `_init_logging()`
 log: logging.Logger = cast(logging.Logger, None)
@@ -41,41 +43,6 @@ def _safe_print(s: str):
 
 
 print = _safe_print
-
-
-class TestQueue(queue.Queue):
-    def __init__(self, filenames: list[str]):
-        super().__init__()
-        self.tests = [ConcurrentTest(filename) for filename in filenames]
-        for test in self.tests:
-            self.put(test)
-
-    def __iter__(self):
-        return iter(self.tests)
-
-
-class TestRunner(threading.Thread):
-    def __init__(self, queue: TestQueue, config: ProjectConfig):
-        super().__init__()
-        self.queue = queue
-        self.config = config
-        self.start()
-
-    def run(self):
-        while True:
-            try:
-                test = self.queue.get(block=False)
-            except queue.Empty:
-                break
-            else:
-                try:
-                    result = test_file(test.filename, self.config, test.print_output)
-                except Exception as e:
-                    if log.getEffectiveLevel() <= logging.DEBUG:
-                        log.exception(test.filename)
-                    test.set_result(e)
-                else:
-                    test.set_result(result)
 
 
 class ConcurrentTest:
@@ -105,8 +72,126 @@ class ConcurrentTest:
         out = self._output.getvalue()
         return out[:-1] if out else out
 
+    def reset_output(self):
+        self._output = io.StringIO()
 
-class SummaryTest:
+
+class TestQueue(queue.Queue[ConcurrentTest]):
+    def __init__(self, filenames: list[str]):
+        super().__init__()
+        self.tests = [ConcurrentTest(filename) for filename in filenames]
+        for test in self.tests:
+            self.put(test)
+
+    def __iter__(self):
+        return iter(self.tests)
+
+
+class TestFileRunner(threading.Thread):
+    def __init__(self, queue: TestQueue, config: ProjectConfig):
+        super().__init__()
+        self.queue = queue
+        self.config = config
+        self.start()
+
+    def run(self):
+        while True:
+            try:
+                test = self.queue.get(block=False)
+            except queue.Empty:
+                break
+            else:
+                try:
+                    _run_test(test, self.config)
+                except Exception as e:
+                    if log.getEffectiveLevel() <= logging.DEBUG:
+                        log.exception(test.filename)
+                    test.set_result(e)
+
+
+def _run_test(test: ConcurrentTest, config: ProjectConfig):
+    trial = Trial(test)
+    while trial.run_or_retry():
+        result = test_file(test.filename, config, test.print_output)
+        trial.handle_result(result)
+
+
+class Trial:
+
+    def __init__(self, test: ConcurrentTest):
+        self._test = test
+        self._retry_on_fail_max = _retry_on_fail_test_option(test.filename)
+        self._run_count = 0
+        self._result: TestSummary | None = None
+
+    def handle_result(self, result: TestSummary):
+        self._run_count += 1
+        self._result = result
+        if self._retry_pending():
+            _handle_test_retry(self._test, self._run_count, self._retry_on_fail_max)
+        else:
+            self._test.set_result(result)
+
+    def run_or_retry(self):
+        return self._run_count == 0 or self._retry_pending()
+
+    def _retry_pending(self):
+        return self._failed() and self._run_count <= self._retry_on_fail_max
+
+    def _failed(self):
+        return self._result is not None and len(self._result.failed) > 0
+
+
+def _handle_test_retry(test: ConcurrentTest, cur_retry: int, max_retries: int):
+    output = test.get_output()
+    if output:
+        print(output)
+        test.reset_output()
+    print(f"Retrying {test} ({cur_retry} of {max_retries})")
+
+
+def _retry_on_fail_test_option(test_filename: str):
+    fm = _read_front_matter(test_filename)
+    encoded_options = fm.get("test-options")
+    if not encoded_options:
+        return 0
+    options = decode_options(encoded_options)
+    val = options.get("retry-on-fail")
+    if val is None:
+        return 0
+    elif not isinstance(val, int):
+        log.warning(
+            "Invalid value for retry-on-fail in \"%s\": expect int", test_filename
+        )
+        return 0
+    return val
+
+
+def _read_front_matter(filename: str):
+    fm_lines: list[str] = []
+    in_fm = False
+    with open(filename) as f:
+        while True:
+            line = f.readline()
+            if not line:
+                break
+            line = line.strip()
+            if not line and not in_fm:
+                continue
+            elif line == "---":
+                fm_lines.append(line)
+                if in_fm:
+                    break
+                in_fm = True
+            elif not in_fm:
+                break
+            else:
+                fm_lines.append(line)
+
+    return parse_front_matter("\n".join(fm_lines), filename)
+
+
+class TestLocation:
     def __init__(self, filename: str, line: int):
         self.filename = filename
         self.line = line
@@ -114,9 +199,9 @@ class SummaryTest:
 
 class ResultSummary:
     def __init__(self):
-        self.failed: list[SummaryTest] = []
-        self.tested: list[SummaryTest] = []
-        self.skipped: list[SummaryTest] = []
+        self.failed: list[TestLocation] = []
+        self.tested: list[TestLocation] = []
+        self.skipped: list[TestLocation] = []
 
 
 def main(args: Any = None):
@@ -159,7 +244,7 @@ def _preview_and_exit(queue: TestQueue):
 
 def _init_runners(queue: TestQueue, config: ProjectConfig, args: Any):
     return [
-        TestRunner(queue, config)
+        TestFileRunner(queue, config)
         for _ in range(args.concurrency or _default_concurrency())
     ]
 
@@ -168,7 +253,7 @@ def _default_concurrency():
     return 8
 
 
-def _join_runners(runners: list[TestRunner]):
+def _join_runners(runners: list[TestFileRunner]):
     for runner in runners:
         runner.join()
 
@@ -188,7 +273,7 @@ def _handle_test_result(
 
 
 def _to_summary_tests(tests: list[Test]):
-    return [SummaryTest(t.filename, t.line) for t in tests]
+    return [TestLocation(t.filename, t.line) for t in tests]
 
 
 def _handle_test_error(filename: str, e: Exception):
@@ -224,11 +309,11 @@ def _print_summary_and_exit(summary: ResultSummary, config: ProjectConfig):
     raise SystemExit(0)
 
 
-def _print_tested_count(tested: list[SummaryTest]):
+def _print_tested_count(tested: list[TestLocation]):
     print(f"{len(tested)} {'test' if len(tested) == 1 else 'tests'} run")
 
 
-def _print_skipped(skipped: list[SummaryTest], config: ProjectConfig):
+def _print_skipped(skipped: list[TestLocation], config: ProjectConfig):
     show_skipped = config.get("show-skipped")
     print(
         f"{len(skipped)} {'test' if len(skipped) == 1 else 'tests'} skipped"
@@ -239,7 +324,7 @@ def _print_skipped(skipped: list[SummaryTest], config: ProjectConfig):
             print(f" - {os.path.relpath(test.filename)}:{test.line}")
 
 
-def _print_failed(failed: list[SummaryTest], config: ProjectConfig):
+def _print_failed(failed: list[TestLocation], config: ProjectConfig):
     print(
         f"{len(failed)} {'test' if len(failed) == 1 else 'tests'} failed "
         "💥 (see above for details)"
