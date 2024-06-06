@@ -112,136 +112,109 @@ option name.
 `example/custom-options.md` illustrates how custom options are defined
 and used.
 
-## Implementation notes
+## Implementation Notes
 
-### Parsing options
+### Decode Options
 
-Groktest uses the private function `_parse_config_options`.
+Groktest uses `decode_options` to process string-encoded test options.
 
-    >>> def parse(options):
-    ...     from pprint import pprint
-    ...     from groktest import _test_options_for_config
-    ...     pprint(_test_options_for_config({"options": options}, "<test>"))
+    >>> from groktest import decode_options
 
 Options are specified using `+<name>` and `-<name>` to enable and
 disable an option respectively.
 
-    >>> parse("+foo")
+    >>> decode_options("+foo")
     {'foo': True}
 
-    >>> parse("-bar")
+    >>> decode_options("-bar")
     {'bar': False}
 
-    >>> parse("+foo -bar")
+    >>> decode_options("+foo -bar")  # +pprint
     {'bar': False, 'foo': True}
 
-    >>> parse("-bar +foo")
+    >>> decode_options("-bar +foo")  # +pprint
     {'bar': False, 'foo': True}
 
 If an option is specified more than once, the last occurrence is used to
 determine the option value.
 
-    >>> parse("-foo +foo")
+    >>> decode_options("-foo +foo")
     {'foo': True}
 
-    >>> parse("+foo -foo")
+    >>> decode_options("+foo -foo")
     {'foo': False}
 
 If an enabled option has a value, it is specified using `+<name>=<value>`.
 
-    >>> parse("+foo=123")
+    >>> decode_options("+foo=123")
     {'foo': 123}
 
 Spaces may appear before or after the equals sign.
 
-    >>> parse("+foo = 123")
+    >>> decode_options("+foo = 123")
     {'foo': 123}
 
 A Value may be quoted using single or double quotes.
 
-    >>> parse("+foo = '123'")
+    >>> decode_options("+foo = '123'")
     {'foo': '123'}
 
-    >>> parse("+foo = \"123\"")
+    >>> decode_options("+foo = \"123\"")
     {'foo': '123'}
 
-    >>> parse("+foo = \"a value with spaces\"")
+    >>> decode_options("+foo = \"a value with spaces\"")
     {'foo': 'a value with spaces'}
 
-    >>> parse("+foo = 'also with spaces'")
+    >>> decode_options("+foo = 'also with spaces'")
     {'foo': 'also with spaces'}
 
 If quotes aren't balanced, the first token after the equals space is
 used as the value.
 
-    >>> parse("+foo = 'not balanced")
+    >>> decode_options("+foo = 'not balanced")
     {'foo': "'not"}
 
-    >>> parse("+foo = not balanced'")
+    >>> decode_options("+foo = not balanced'")
     {'foo': 'not'}
 
 This syntax is not supported with negation.
 
-    >>> parse("-foo=123")
+    >>> decode_options("-foo=123")
     {'foo': False}
 
 Tokens that don't match the option specification are ignored.
 
-    >>> parse("Nothing here is an option")
+    >>> decode_options("Nothing here is an option")
     {}
 
-    >>> parse("")
+    >>> decode_options("")
     {}
 
-    >>> parse("+ foo")
+    >>> decode_options("+ foo")
     {}
 
-    >>> parse("foo=123")
+    >>> decode_options("foo=123")
     {}
 
 Typical configuration examples:
 
-    >>> parse("+wildcard")
+    >>> decode_options("+wildcard")
     {'wildcard': True}
 
-    >>> parse("-case")
+    >>> decode_options("-case")
     {'case': False}
 
-    >>> parse("+wildcard -case")
+    >>> decode_options("+wildcard -case")  # +pprint
     {'case': False, 'wildcard': True}
 
-    >>> parse("+wildcard=* -space")
+    >>> decode_options("+wildcard=* -space")  # +pprint
     {'space': False, 'wildcard': '*'}
 
-### Decoding Options
-
-`decode_options` decodes an option string to a dict of option values.
-
-    >>> from groktest import decode_options
-
-    >>> decode_options("+foo")
-    {'foo': True}
-
-    >>> decode_options("+foo=123")
-    {'foo': 123}
-
-    >>> decode_options("+foo=abc")
-    {'foo': 'abc'}
-
-    >>> decode_options("-foo")
-    {'foo': False}
-
-    >>> decode_options("+foo +bar")  # +pprint
-    {'bar': True, 'foo': True}
-
-    >>> decode_options("+foo=123 -bar")  # +pprint
-    {'bar': False, 'foo': 123}
-
-    >>> decode_options("+foo=abc bar")
-    {'foo': 'abc'}
+Options may be specified across lines.
 
     >>> decode_options("""
-    ...   +foo this text is ignored
-    ...   +bar=123
+    ...   +foo
+    ...   -bar
+    ...   +baz=123
     ... """)  # +pprint
-    {'bar': 123, 'foo': True}
+    {'bar': False, 'baz': 123, 'foo': True}
