@@ -3,7 +3,7 @@
 Run Groktest using the `groktest` command.
 
     >>> run("groktest --help")  # +diff
-    usage: groktest [--version] [-h] [--preview] [--last] [-F] [-C N]
+    usage: groktest [--version] [-h] [--preview] [--last] [-f] [-C N]
                     [--show-skipped] [--debug]
                     [[PROJECT [SUITE]] | [FILE...] ...]
     ⤶
