@@ -29,7 +29,7 @@ matter.
     ⤶
     <0>
 
-    >>> pprint(eval(config))  # +wildcard +paths
+    >>> eval(config)  # +wildcard +paths +pprint
     {'__src__': ['.../examples/config/test.md',
                  '.../examples/config/pyproject.toml'],
      'fail-fast': True,

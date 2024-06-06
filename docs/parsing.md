@@ -55,6 +55,7 @@ Groktest's default pattern uses the `doctest` prompts.
 Function to print found tests using the default configuration:
 
     >>> def find_tests(s):
+    ...     from pprint import pprint
     ...     for m in DEFAULT_SPEC.test_pattern.finditer(s):
     ...         pprint(m.groupdict())
 

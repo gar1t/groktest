@@ -119,6 +119,7 @@ and used.
 Groktest uses the private function `_parse_config_options`.
 
     >>> def parse(options):
+    ...     from pprint import pprint
     ...     from groktest import _test_options_for_config
     ...     pprint(_test_options_for_config({"options": options}, "<test>"))
 

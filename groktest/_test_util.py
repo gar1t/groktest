@@ -1,11 +1,9 @@
 import os
-from pprint import pprint
 import re
 import subprocess
 
 __all__ = [
     "os",
-    "pprint",
     "re",
     "run",
 ]

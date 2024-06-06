@@ -6,14 +6,7 @@ python-init: "msg = 'Hello!'"
 # Python Globals
 
     >>> sorted(globals())  # +pprint
-    ['__builtins__',
-     '__file__',
-     '__name__',
-     'msg',
-     'os',
-     'pprint',
-     're',
-     'run']
+    ['__builtins__', '__file__', '__name__', 'msg', 'os', 're', 'run']
 
 Python tests have access to the standard set of Python builtins.
 
