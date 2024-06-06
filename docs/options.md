@@ -212,3 +212,36 @@ Typical configuration examples:
 
     >>> parse("+wildcard=* -space")
     {'space': False, 'wildcard': '*'}
+
+### Decoding Options
+
+`decode_options` decodes an option string to a dict of option values.
+
+    >>> from groktest import decode_options
+
+    >>> decode_options("+foo")
+    {'foo': True}
+
+    >>> decode_options("+foo=123")
+    {'foo': 123}
+
+    >>> decode_options("+foo=abc")
+    {'foo': 'abc'}
+
+    >>> decode_options("-foo")
+    {'foo': False}
+
+    >>> decode_options("+foo +bar")  # +pprint
+    {'bar': True, 'foo': True}
+
+    >>> decode_options("+foo=123 -bar")  # +pprint
+    {'bar': False, 'foo': 123}
+
+    >>> decode_options("+foo=abc bar")
+    {'foo': 'abc'}
+
+    >>> decode_options("""
+    ...   +foo this text is ignored
+    ...   +bar=123
+    ... """)  # +pprint
+    {'bar': 123, 'foo': True}
