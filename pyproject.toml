@@ -17,6 +17,14 @@ dependencies = [
     "pyyaml",
 ]
 
+[project.optional-dependencies]
+
+dev = [
+    "black",
+    "build",
+    "twine",
+]
+
 [project.scripts]
 
 groktest = "groktest.__main__:main"

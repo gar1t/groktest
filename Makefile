@@ -1,11 +1,11 @@
 build:
 	python -m build
 
-install-build-deps:
-	pip install build virtualenv twine
+install-dev:
+	python -m pip install -e '.[dev]'
 
 clean:
-	rm -rf dist *.egg-info
+	rm -rf build dist *.egg-info
 
 upload:
 	python -m twine upload dist/*
