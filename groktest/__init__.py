@@ -241,6 +241,7 @@ class RunnerState:
         self.config = config
         self.summary = TestSummary()
         self.skip_rest = False
+        self.skip_rest_for_fail_fast = False
         self.print_output = print_output or print
         self.parse_functions = parse_functions or {}
         self.option_functions = option_functions or {}
@@ -295,7 +296,7 @@ DEFAULT_TEST_PATTERN = r"""
 """
 
 OPTIONS_PATTERN = re.compile(
-    r"[+]([\w\-]+)(?:\s*=\s*((?:'.*?')|(?:\".*?\")|(?:[^\s]+)))?"
+    r"[+]([\w\-]+)(?:\s*=\s*((?:'.*?')|(?:\".*?\")|(?:[^\s]+)))?"  # \
     r"|[-]([\w\-]+)",
 )
 
@@ -933,12 +934,15 @@ def test_file(
     _apply_skip_for_solo(state.tests)
     with RuntimeScope(state.runtime):
         for test in state.tests:
-            test_options = _test_options(test, state)
-            _apply_skip_rest(test_options, state)
-            if _skip_test(test, test_options, state):
+            if state.skip_rest_for_fail_fast:
                 _handle_test_skipped(test, state)
             else:
-                run_test(test, test_options, state)
+                test_options = _test_options(test, state)
+                _apply_skip_rest(test_options, state)
+                if _skip_test(test, test_options, state):
+                    _handle_test_skipped(test, state)
+                else:
+                    run_test(test, test_options, state)
         return state.summary
 
 
@@ -1401,7 +1405,7 @@ def _handle_test_failed(
     state.summary.failed.append(test)
     state.summary.tested.append(test)
     if state.config.get("fail-fast"):
-        state.skip_rest = True
+        state.skip_rest_for_fail_fast = True
 
 
 def _print_failed_test_sep(options: TestOptions, state: RunnerState):
