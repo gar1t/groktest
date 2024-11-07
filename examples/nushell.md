@@ -33,14 +33,12 @@ referenced using `$env.TEST_TEMP`.
     .../groktest-nushell-...
 
     > ls
-    ⤶
 
     > touch hello
 
     > ls
     name  type size modified
     hello file  0 B now
-    ⤶
 
 Bound variables are accessible via the `vars` Nu variable.
 

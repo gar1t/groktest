@@ -486,7 +486,6 @@ def _project_candidate(path_arg: str):
     paths = [
         path_arg,
         os.path.join(path_arg, "pyproject.toml"),
-        os.path.join(path_arg, "Cargo.toml"),
     ]
     for path in paths:
         if path[-5:].lower() == ".toml" and os.path.isfile(path):

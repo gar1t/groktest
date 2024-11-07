@@ -56,7 +56,7 @@ __all__ = [
     "test_file",
 ]
 
-__version__ = "0.2.3"  # Sync with pyproject.toml
+__version__ = "0.2.4"  # Sync with pyproject.toml
 
 log = logging.getLogger("groktest")
 
@@ -751,7 +751,6 @@ def _try_test_file_project_config(filename: str):
     for dirname in _iter_parents(filename):
         paths = [
             os.path.join(dirname, "pyproject.toml"),
-            os.path.join(dirname, "Cargo.toml"),
         ]
         for path in paths:
             try:
