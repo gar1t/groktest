@@ -9,13 +9,14 @@ __all__ = [
 ]
 
 
-def run(cmd: str):
+def run(cmd: str, env: dict[str, str] | None = None):
+    env = {
+        **os.environ,
+        **(env or {}),
+        "PYTHONPATH": _groktest_home(),
+    }
     p = subprocess.run(
-        cmd,
-        shell=True,
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-        env={**os.environ, "PYTHONPATH": _groktest_home()},
+        cmd, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, env=env
     )
     print(p.stdout.decode())
     print(f"<{p.returncode}>")

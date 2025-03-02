@@ -20,31 +20,66 @@ If `skip` has a value, the value is used to read an environment
 variable. If the environment variable is set and non-empty, `skip`
 evaluates to true and the test is skipped.
 
-Use `__abc123__` as a sample environment variable to determine whether a
-test is skipped.
+The name may be prefixed with `!` to indicate the test should be skipped
+if the env var is not set.
 
-Verify the value isn't set.
+To illustrate, create a sample test that uses env vars to skip tests.
 
-    >>> import os  # -skip
-    >>> os.getenv("__abc123__")  # +pprint
-    None
+    >>> import tempfile, os
 
-    >>> 1  # +skip=__abc123__ +fails
-    2
+    >>> tmp = tempfile.mkdtemp(prefix="groktest-")
+    >>> test_filename = os.path.join(tmp, "test.md")
+    >>> _ = open(test_filename, "w").write("""
+    ... >>> 1  # +skip=foo
+    ... 2
+    ... >>> 2  # +skip=!foo
+    ... 1
+    ... """)
 
-Set the environment variable to a non-empty value.
+Run the test without the `foo` env var.
 
-    >>> os.environ["__abc123__"] = "1"
-    >>> os.getenv("__abc123__")
-    '1'
+    >>> run(
+    ...     f"python -m groktest {test_filename} --show-skipped",
+    ...     env={"foo": "", "NO_SAVE_LAST": "1"}
+    ... )  # +wildcard
+    Testing .../test.md
+    **********************************************************************
+    File ".../test.md", line 2
+    Failed example:
+        1  # +skip=foo
+    Expected:
+        2
+    Got:
+        1
+    ----------------------------------------------------------------------
+    1 test run
+    1 test skipped
+     - .../test.md:4
+    1 test failed 💥 (see above for details)
+     - .../test.md:2
+    ⤶
+    <1>
 
-Skip using the environment variable.
+Run the test with `foo`.
 
-    >>> 1  # +skip=__abc123__ +fails
-    2
-
-Reset the environment.
-
-    >>> del os.environ["__abc123__"]
-    >>> os.getenv("__abc123__")  # +pprint
-    None
+    >>> run(
+    ...     f"python -m groktest {test_filename} --show-skipped",
+    ...     env={"foo": "1", "NO_SAVE_LAST": "1"}
+    ... )  # +wildcard
+    Testing .../test.md
+    **********************************************************************
+    File ".../test.md", line 4
+    Failed example:
+        2  # +skip=!foo
+    Expected:
+        1
+    Got:
+        2
+    ----------------------------------------------------------------------
+    1 test run
+    1 test skipped
+     - .../test.md:2
+    1 test failed 💥 (see above for details)
+     - .../test.md:4
+    ⤶
+    <1>

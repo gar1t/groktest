@@ -413,7 +413,8 @@ def _apply_last(args: Any):
     if args.last:
         args.paths = _last_paths()
     else:
-        _save_last_cmd(args)
+        if os.getenv("NO_SAVE_LAST") != "1":
+            _save_last_cmd(args)
 
 
 def _last_paths():

@@ -975,7 +975,10 @@ def _skip_test(test: Test, options: TestOptions, state: RunnerState):
     if val is None:
         val = _try_option_function_skip(test, options, state)
     elif isinstance(val, str):
-        val = bool(os.getenv(val))
+        if val[:1] == "!":
+            val = not bool(os.getenv(val[1:]))
+        else:
+            val = bool(os.getenv(val))
     return val if val is not None else state.skip_rest
 
 
