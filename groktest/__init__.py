@@ -56,7 +56,7 @@ __all__ = [
     "test_file",
 ]
 
-__version__ = "0.2.4"  # Sync with pyproject.toml
+__version__ = "0.3"  # Sync with pyproject.toml
 
 log = logging.getLogger("groktest")
 
