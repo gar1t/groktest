@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import *
 from types import ModuleType
 
 import copy
 import difflib
 import doctest
 import importlib
-import importlib.util
 import inspect
 import io
 import json
@@ -18,6 +16,7 @@ import os
 import re
 import sys
 import tokenize
+from typing import Any, Callable, Generator, Iterator, Sequence, Union, cast
 
 import yaml
 
@@ -56,7 +55,7 @@ __all__ = [
     "test_file",
 ]
 
-__version__ = "0.3"  # Sync with pyproject.toml
+__version__ = "0.3.1"  # Sync with pyproject.toml
 
 log = logging.getLogger("groktest")
 
@@ -86,23 +85,23 @@ class ProjectDecodeError(Error):
     pass
 
 
-ProjectConfig = Dict[str, Any]
+ProjectConfig = dict[str, Any]
 
-FrontMatter = Dict[str, Any]
+FrontMatter = dict[str, Any]
 
-TestConfig = Dict[str, Any]
+TestConfig = dict[str, Any]
 
-TestOptions = Dict[str, Any]
+TestOptions = dict[str, Any]
 
-ParseTypes = Dict[str, str]
+ParseTypes = dict[str, str]
 
 ParseTypeFunction = Callable[[str], Any]
 
-ParseTypeFunctions = Dict[str, ParseTypeFunction]
+ParseTypeFunctions = dict[str, ParseTypeFunction]
 
 TransformFunction = Callable[[str, str], tuple[str, str]]
 
-OptionFunction = Callable[[Any, TestOptions, "Test"], Optional[TransformFunction]]
+OptionFunction = Callable[[Any, TestOptions, "Test"], TransformFunction | None]
 
 OptionFunctions = dict[str, OptionFunction]
 
@@ -169,17 +168,17 @@ class TestProxy(Test):
 
 
 class TestResult:
-    def __init__(self, code: int, output: str, short_error: Optional[str] = None):
+    def __init__(self, code: int, output: str, short_error: str | None = None):
         self.code = code
         self.output = output
         self.short_error = short_error
 
 
 class Runtime:
-    def start(self, config: Optional[TestConfig] = None) -> None:
+    def start(self, config: TestConfig | None = None) -> None:
         raise NotImplementedError()
 
-    def init_for_tests(self, config: Optional[TestConfig] = None) -> None:
+    def init_for_tests(self, config: TestConfig | None = None) -> None:
         raise NotImplementedError()
 
     def exec_test_expr(self, test: Test, options: TestOptions) -> TestResult:
@@ -196,7 +195,7 @@ class Runtime:
 
 
 class RuntimeScope:
-    def __init__(self, runtime: Runtime, stop_timeout: Optional[int] = None):
+    def __init__(self, runtime: Runtime, stop_timeout: int | None = None):
         self.runtime = runtime
         self.stop_timeout = stop_timeout
 
@@ -212,7 +211,7 @@ class RuntimeScope:
             log.error("Error stopping runtime: %s", e)
 
 
-def _stop_runtime(runtime: Runtime, timeout: Optional[int]):
+def _stop_runtime(runtime: Runtime, timeout: int | None):
     if timeout is not None:
         runtime.stop(timeout)
     else:
@@ -225,14 +224,14 @@ Printer = Callable[[str], None]
 class RunnerState:
     def __init__(
         self,
-        tests: List[Test],
+        tests: list[Test],
         runtime: Runtime,
         spec: TestSpec,
         config: TestConfig,
         filename: str,
-        print_output: Optional[Printer] = None,
-        parse_functions: Optional[ParseTypeFunctions] = None,
-        option_functions: Optional[OptionFunctions] = None,
+        print_output: Printer | None = None,
+        parse_functions: ParseTypeFunctions | None = None,
+        option_functions: OptionFunctions | None = None,
     ):
         self.tests = tests
         self.runtime = runtime
@@ -258,8 +257,8 @@ class TestMatch:
     def __init__(
         self,
         match: bool,
-        vars: Optional[Dict[str, Any]] = None,
-        reason: Optional[Any] = None,
+        vars: dict[str, Any] | None = None,
+        reason: Any | None = None,
     ):
         self.match = match
         self.vars = vars
@@ -270,8 +269,8 @@ TestMatcher = Callable[
     [
         str,
         str,
-        Optional[TestOptions],
-        Optional[RunnerState],
+        TestOptions | None,
+        RunnerState | None,
     ],
     TestMatch,
 ]
@@ -345,7 +344,7 @@ Marker = Any
 
 DOCTEST_MARKER: Marker = object()
 
-SPECS: Dict[str, Union[TestSpec, Marker]] = {
+SPECS: dict[str, Union[TestSpec, Marker]] = {
     "python": PYTHON_SPEC,
     "nushell": NUSHELL_SPEC,
     "doctest": DOCTEST_MARKER,
@@ -360,8 +359,8 @@ RUNTIME = {
 
 def init_runner_state(
     filename: str,
-    project_config: Optional[ProjectConfig] = None,
-    print_output: Optional[Printer] = None,
+    project_config: ProjectConfig | None = None,
+    print_output: Printer | None = None,
 ):
     filename = os.path.abspath(filename)
     contents = _read_file(filename)
@@ -425,7 +424,7 @@ def _parsed_front_matter(s: str, filename: str):
     s = m.group(1)
     try:
         data = _try_parsers([_parse_json, _parse_toml, _parse_yaml], s, filename)
-    except ValueError as e:
+    except ValueError:
         log.warning(
             "Unable to parse front matter in %s - verify valid JSON, TOML, or YAML",
             filename,
@@ -510,7 +509,7 @@ def _spec_for_front_matter(fm: Any, filename: str):
     )
 
 
-def _spec_for_front_matter_test_type(fm: Dict[str, Any], filename: str):
+def _spec_for_front_matter_test_type(fm: dict[str, Any], filename: str):
     if not isinstance(fm, dict):
         return None
     try:
@@ -560,7 +559,7 @@ def parse_tests(content: str, spec: TestSpec, filename: str):
         tests.append(_test_for_match(m, spec, linepos, filename))
         linepos += content.count('\n', m.start(), m.end())
         charpos = m.end()
-    return cast(List[Test], tests)
+    return cast(list[Test], tests)
 
 
 def _test_for_match(m: re.Match[str], spec: TestSpec, linepos: int, filename: str):
@@ -580,7 +579,7 @@ def _format_expr(m: re.Match[str], spec: TestSpec, linepos: int, filename: str):
     return "\n".join(_strip_prompts(lines, spec, linepos, filename))
 
 
-def _strip_prompts(lines: List[str], spec: TestSpec, linepos: int, filename: str):
+def _strip_prompts(lines: list[str], spec: TestSpec, linepos: int, filename: str):
     return [
         _strip_prompt(line, spec.ps1 if i == 0 else spec.ps2, linepos + i, filename)
         for i, line in enumerate(lines)
@@ -599,7 +598,7 @@ def _strip_prompt(s: str, prompt: str, linepos: int, filename: str):
 
 
 def _parse_test_options(expr: str, spec: TestSpec):
-    options: Dict[str, Any] = {}
+    options: dict[str, Any] = {}
     for part in _test_option_candidates(expr, spec):
         options.update(decode_options(part))
     return options
@@ -631,12 +630,12 @@ def _dedented_lines(s: str, indent: int, linepos: int, filename: str):
     return [line[indent:] for line in lines]
 
 
-def _strip_trailing_empty_line(lines: List[str]):
+def _strip_trailing_empty_line(lines: list[str]):
     if len(lines) and not lines[-1].strip():
         lines.pop()
 
 
-def _check_test_indent(lines: List[str], indent: int, linepos: int, filename: str):
+def _check_test_indent(lines: list[str], indent: int, linepos: int, filename: str):
     prefix = " " * indent
     for i, line in enumerate(lines):
         if line and not line.startswith(prefix):
@@ -648,7 +647,7 @@ def _check_test_indent(lines: List[str], indent: int, linepos: int, filename: st
 
 def _test_config(
     test_fm: FrontMatter,
-    project_config: Optional[ProjectConfig],
+    project_config: ProjectConfig | None,
     filename: str,
 ):
     project_config = project_config or {}
@@ -703,10 +702,10 @@ def _mapped_front_matter_config(fm: FrontMatter) -> TestConfig:
 
 
 def _merge_kv_dest(
-    path: List[str],
-    src: Dict[str, Any],
-    dest: Dict[str, Any],
-) -> Union[Tuple[None, None, None], Tuple[str, Any, Dict[str, Any]]]:
+    path: list[str],
+    src: dict[str, Any],
+    dest: dict[str, Any],
+) -> Union[tuple[None, None, None], tuple[str, Any, dict[str, Any]]]:
     cur_src = src
     for key in path[:-1]:
         try:
@@ -727,7 +726,7 @@ def _merge_kv_dest(
     return path[-1], val, cur_dest
 
 
-def _merge_append_list(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
+def _merge_append_list(path: list[str], src: dict[str, Any], dest: dict[str, Any]):
     key, src_val, append_dest = _merge_kv_dest(path, src, dest)
     if not key:
         return
@@ -735,7 +734,7 @@ def _merge_append_list(path: List[str], src: Dict[str, Any], dest: Dict[str, Any
     append_dest[key] = _coerce_list(src_val) + _coerce_list(append_dest.get(key))
 
 
-def _merge_items(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
+def _merge_items(path: list[str], src: dict[str, Any], dest: dict[str, Any]):
     key, src_val, merge_dest = _merge_kv_dest(path, src, dest)
     if not key:
         return
@@ -743,7 +742,7 @@ def _merge_items(path: List[str], src: Dict[str, Any], dest: Dict[str, Any]):
     merge_dest.setdefault(key, {}).update(src_val)
 
 
-def _coerce_list(x: Any) -> List[Any]:
+def _coerce_list(x: Any) -> list[Any]:
     return x if isinstance(x, list) else [] if x is None else [x]
 
 
@@ -773,7 +772,7 @@ def _iter_parents(path: str):
         last = parent
 
 
-def start_runtime(name: str, config: Optional[TestConfig] = None):
+def start_runtime(name: str, config: TestConfig | None = None):
     try:
         import_spec = RUNTIME[name]
     except KeyError:
@@ -807,16 +806,16 @@ def _module_parse_type_functions(config: TestConfig) -> ParseTypeFunctions:
 
 
 def _config_src_path(config: TestConfig):
-    config_src: List[str] = _coerce_list(config["__src__"])
+    config_src: list[str] = _coerce_list(config["__src__"])
     return [os.path.dirname(path) for path in config_src]
 
 
 def _iter_named_functions(
-    modules: List[Any],
-    module_path: List[str],
+    modules: list[Any],
+    module_path: list[str],
     function_prefix: str,
     name_attr: str,
-) -> Generator[Tuple[str, Callable[..., Any]], None, None]:
+) -> Generator[tuple[str, Callable[..., Any]], None, None]:
     for module_name in modules:
         log.debug("Loading parse functions from %s", module_name)
         module = _try_load_module(module_name, module_path)
@@ -828,7 +827,7 @@ def _iter_named_functions(
             yield function_name, f
 
 
-def _try_load_module(spec: str, path: List[str]):
+def _try_load_module(spec: str, path: list[str]):
     if not isinstance(spec, str):
         log.warning("Invalid value for functions %r, expected a string", spec)
         return None
@@ -843,7 +842,7 @@ def _try_load_module(spec: str, path: List[str]):
         return None
 
 
-def _ensure_sys_path_for_doc_tests(doctest_path: List[str]):
+def _ensure_sys_path_for_doc_tests(doctest_path: list[str]):
     # Add in reverse order as doctest path goes from more specific (test
     # file path) to less specific (project path)
     for p in reversed(doctest_path):
@@ -903,7 +902,7 @@ def _parselib_regex_converter(pattern: str):
     def f(s: str):
         return s
 
-    f.pattern = pattern
+    f.pattern = pattern  # type: ignore
     return f
 
 
@@ -920,8 +919,8 @@ def _option_functions(config: TestConfig) -> OptionFunctions:
 
 def test_file(
     filename: str,
-    config: Optional[ProjectConfig] = None,
-    print_output: Optional[Printer] = None,
+    config: ProjectConfig | None = None,
+    print_output: Printer | None = None,
 ):
     state = init_runner_state(filename, config, print_output)
     if isinstance(state, DocTestRunnerState):
@@ -958,7 +957,7 @@ def run_test(test: Test, options: TestOptions, state: RunnerState):
     _handle_test_result(result, test, options, state)
 
 
-def _apply_skip_for_solo(tests: List[Test]):
+def _apply_skip_for_solo(tests: list[Test]):
     solo_tests = [test for test in tests if test.options.get("solo")]
     if not solo_tests:
         return
@@ -1057,7 +1056,7 @@ def _log_test_result_match(
 
 
 def _try_match_output_candidates(
-    output_candidates: List[str],
+    output_candidates: list[str],
     expected: str,
     test: Test,
     state: RunnerState,
@@ -1246,11 +1245,11 @@ def _test_options_for_config(config: TestConfig, filename: str):
     return parsed
 
 
-def decode_options(s: str) -> Dict[str, Any]:
+def decode_options(s: str) -> dict[str, Any]:
     return dict(_name_val_for_option_match(m) for m in OPTIONS_PATTERN.finditer(s))
 
 
-def _name_val_for_option_match(m: re.Match[str]) -> Tuple[str, Any]:
+def _name_val_for_option_match(m: re.Match[str]) -> tuple[str, Any]:
     plus_name, plus_val, neg_name = m.groups()
     if neg_name:
         assert plus_name is None and plus_val is None, m
@@ -1278,8 +1277,8 @@ def matcher(options: TestOptions) -> TestMatcher:
 def parse_match(
     expected: str,
     test_output: str,
-    options: Optional[TestOptions] = None,
-    state: Optional[RunnerState] = None,
+    options: TestOptions | None = None,
+    state: RunnerState | None = None,
 ):
     options = options or {}
     case_sensitive = _option_value("case", options, True)
@@ -1300,7 +1299,7 @@ def parse_match(
         return TestMatch(False)
 
 
-def _option_value(name: str, options: Dict[str, Any], default: Any):
+def _option_value(name: str, options: dict[str, Any], default: Any):
     try:
         val = options[name]
     except KeyError:
@@ -1314,8 +1313,8 @@ def _option_value(name: str, options: Dict[str, Any], default: Any):
 def str_match(
     expected: str,
     test_output: str,
-    options: Optional[TestOptions] = None,
-    state: Optional[RunnerState] = None,
+    options: TestOptions | None = None,
+    state: RunnerState | None = None,
 ):
     options = options or {}
     expected, test_output = _apply_transform_options(expected, test_output, options)
@@ -1341,7 +1340,7 @@ def _wildcard_match(
     expected: str,
     test_output: str,
     wildcard: str,
-    options: Optional[TestOptions],
+    options: TestOptions | None,
 ):
     # Credit: Python doctest authors
     expected_parts = expected.split(wildcard)
@@ -1385,7 +1384,7 @@ def _wildcard_match(
 def _default_str_match(
     expected: str,
     test_output: str,
-    options: Optional[TestOptions] = None,
+    options: TestOptions | None = None,
 ):
     return TestMatch(True) if test_output == expected else TestMatch(False)
 
@@ -1434,7 +1433,7 @@ def _print_failed_test(
         _print_test_expected(test, state)
         _print_test_result_output(result, options, state)
     if match.reason:
-        state.print_output(f"Reason:")
+        state.print_output("Reason:")
         _print_mismatch_reason(match.reason, test, state)
 
 
@@ -1466,7 +1465,7 @@ def _format_lines_for_diff(
     return (expected.split("\n"), output.split("\n"))
 
 
-def _diff_lines(a: List[str], b: List[str]):
+def _diff_lines(a: list[str], b: list[str]):
     diff = difflib.unified_diff(a, b, n=2)
     diff_no_header = list(diff)[2:]
     for line in diff_no_header:
@@ -1564,7 +1563,7 @@ def _doctest_options(config: TestConfig):
     return flags
 
 
-def _iter_doctest_opts(opts: str) -> Generator[Tuple[int, bool], None, None]:
+def _iter_doctest_opts(opts: str) -> Generator[tuple[int, bool], None, None]:
     import doctest
 
     for opt in re.findall(r"(?i)[+-][a-z0-9_]+", opts):
@@ -1605,7 +1604,7 @@ def _load_toml(filename: str):
             return data
 
 
-def _project_config_for_data(data: Dict[str, Any]):
+def _project_config_for_data(data: dict[str, Any]):
     try:
         groktest_data = data["tool"]["groktest"]
     except KeyError:
