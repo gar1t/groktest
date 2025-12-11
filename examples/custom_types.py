@@ -1,6 +1,5 @@
-from typing import *
-
 import re
+from typing import Any
 
 __all__ = [
     "parse_ver",
@@ -21,8 +20,8 @@ def parse_ver(s: str):
     return None
 
 
-parse_ver.pattern = _VER_PATTERN
-parse_ver.regex_group_count = 3
+parse_ver.pattern = _VER_PATTERN  # type: ignore
+parse_ver.regex_group_count = 3  # type: ignore
 
 
 def parse_upper(s: str):
@@ -30,7 +29,7 @@ def parse_upper(s: str):
 
 
 # Groktest specific attr `type_name` to configure name
-parse_upper.type_name = "loud"
+parse_upper.type_name = "loud"  # type: ignore
 
 
 # Not available to tests as it's not defined in `__all__`
@@ -43,7 +42,7 @@ def option_skip_red(val: Any):
         raise RuntimeError("skip")
 
 
-option_skip_red.option_name = "skip-red"
+option_skip_red.option_name = "skip-red"  # type: ignore
 
 
 def option_table(val: Any):

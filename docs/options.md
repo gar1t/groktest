@@ -7,10 +7,10 @@ enabled or disabled, When enabled, an option may have a value.
 
 - `parse`
 
-   Output is matched using the `parse` library. Disabled by default.
+  Output is matched using the `parse` library. Disabled by default.
 
-   Enable this option to specify output type or to capture output to
-   variables.
+  Enable this option to specify output type or to capture output to
+  variables.
 
 - `case`
 
@@ -77,8 +77,7 @@ enabled or disabled, When enabled, an option may have a value.
   Consider whitespace when comparing expected and test output. Enabled
   by default.
 
-  To disregard whitespace in matches, disable the option using
-  `-space`.
+  To disregard whitespace in matches, disable the option using `-space`.
 
 - `paths`
 
@@ -109,8 +108,8 @@ example, defines the option `xxx`.
 The function can provide an `option_name` attribute to specify the
 option name.
 
-`example/custom-options.md` illustrates how custom options are defined
-and used.
+[`examples/custom-options.md`](/examples/custom-options.md) illustrates
+how custom options are defined and used.
 
 ## Implementation Notes
 
@@ -144,7 +143,8 @@ determine the option value.
     >>> decode_options("+foo -foo")
     {'foo': False}
 
-If an enabled option has a value, it is specified using `+<name>=<value>`.
+If an enabled option has a value, it is specified using
+`+<name>=<value>`.
 
     >>> decode_options("+foo=123")
     {'foo': 123}

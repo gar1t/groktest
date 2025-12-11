@@ -17,9 +17,11 @@ Test starts in the test doc directory.
 
     > ls *.md | get name | to text  # +wildcard
     assert.md
+    custom-options.md
     defaults.md
     ...
     whitespace.md
+    ⤶
 
 Nushell tests are configured with a temporary directory, which can be
 referenced using `$env.TEST_TEMP`.
