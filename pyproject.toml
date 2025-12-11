@@ -1,29 +1,21 @@
 [project]
 
 name = "groktest"
-version = "0.3"  # Sync with groktest.__init__
-authors = [
-  { name="Garrett Smith", email="garrett@placeon.earth" },
-]
+version = "0.3.1" # Sync with groktest.__init__
+authors = [{ name = "Garrett Smith", email = "garrett@placeon.earth" }]
 description = "Literate testing framework based on Python doctest"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
 ]
-dependencies = [
-    "pyyaml",
-]
+dependencies = ["pyyaml"]
 
 [project.optional-dependencies]
 
-dev = [
-    "black",
-    "build",
-    "twine",
-]
+dev = ["black", "build", "twine"]
 
 [project.scripts]
 
@@ -41,11 +33,7 @@ extend-exclude = "/groktest/_vendor_"
 
 [tool.groktest]
 
-include = [
-  "README.md",
-  "docs/*.md",
-  "examples/*.md"
-]
+include = ["README.md", "docs/*.md", "examples/*.md"]
 
 exclude = [
   "docs/yaml.md",
