@@ -50,12 +50,13 @@ __all__ = [
     "matcher",
     "parse_front_matter",
     "parse_match",
+    "parse_type",
     "parse_tests",
     "start_runtime",
     "test_file",
 ]
 
-__version__ = "0.3.1"  # Sync with pyproject.toml
+__version__ = "0.3.2"  # Sync with pyproject.toml
 
 log = logging.getLogger("groktest")
 
@@ -1612,3 +1613,13 @@ def _project_config_for_data(data: dict[str, Any]):
     else:
         groktest_data["__src__"] = data["__src__"]
         return cast(ProjectConfig, groktest_data)
+
+
+def parse_type(name: str, pattern: str, group_count: int = 0):
+    def decorator(f: Callable[[str], Any]):
+        f.type_name = name  # type: ignore
+        f.pattern = pattern  # type: ignore
+        f.regex_group_count = group_count  # type: ignore
+        return f
+
+    return decorator
